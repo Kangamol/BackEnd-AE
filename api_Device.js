@@ -18,6 +18,7 @@ router.get("/getdevicemaster", async(req, res) => {
                 LEFT JOIN MA.RoomAE ON DM.FloorCode = MA.RoomAE.FloorCode AND DM.RoomCode = MA.RoomAE.RoomCode
             `);
         res.json(result.recordset);
+        await pool.close
     } catch (error) {
         res.json({ result: "ERROR /getdevicemaster " });
     }
@@ -29,7 +30,8 @@ router.get("/getdeviceedit/:id", async(req, res) => {
         const { id } = req.params
         const pool = await poolPromise;
         const result = await pool.request().query(`
-        SELECT	JobTypeCode, CategoryCode, DeviceNo, FloorCode, RoomCode, PurchaseDate, OutWarranty, Owner, Desciption, Status1, Status2
+        SELECT	JobTypeCode, CategoryCode, DeviceNo, FloorCode, RoomCode, PurchaseDate,
+                OutWarranty, Owner, Desciption, Status1, Status2, IPv4_1, IPv4_2
         FROM	MA.DevicesMaster
         WHERE	ID = ${ id }
             `);
@@ -58,7 +60,9 @@ router.get("/getcategory", async(req, res) => {
     try {
         const pool = await poolPromise;
         const result = await pool.request().query(`
-        SELECT JobTypeCode, CategoryCode, CategoryName FROM MA.Category
+        SELECT JobTypeCode, CategoryCode, CategoryName
+        FROM MA.Category
+        ORDER BY JobTypeCode, CONVERT(INT, SUBSTRING(CategoryCode, 2, 2))
             `);
         res.json(result.recordset);
     } catch (error) {
@@ -93,7 +97,7 @@ router.get("/getroom", async(req, res) => {
 // แก้ไข device 
 router.post("/edit-device/:id", async(req, res) => {
     const { id } = req.params
-    const { JobTypeCode, CategoryCode, DeviceNo, FloorCode, RoomCode, PurchaseDate, OutWarranty, Owner, Desciption, Status1 } = req.body
+    const { JobTypeCode, CategoryCode, DeviceNo, FloorCode, RoomCode, PurchaseDate, OutWarranty, Owner, Desciption, Status1, IPv4_1, IPv4_2 } = req.body
     try {
         const pool = await poolPromise;
         const result = await pool.request().query(`
@@ -107,7 +111,9 @@ router.post("/edit-device/:id", async(req, res) => {
             OutWarranty = '${ OutWarranty }',
             Owner = '${ Owner }',
             Desciption = '${ Desciption }',
-            Status1 = '${ Status1 }'
+            Status1 = '${ Status1 }',
+            IPv4_1 = '${ IPv4_1 }',
+            IPv4_2 = '${ IPv4_2 }'
             WHERE MA.DevicesMaster.ID = ${ id }
               `);
         res.json({ result: constants.kResultOk });
@@ -119,12 +125,12 @@ router.post("/edit-device/:id", async(req, res) => {
 
 // สร้าง device ใหม่
 router.post("/create-device", async(req, res) => {
-    const { JobTypeCode, CategoryCode, DeviceNo, FloorCode, RoomCode, PurchaseDate, OutWarranty, Owner, Desciption, Status1 } = req.body
+    const { JobTypeCode, CategoryCode, DeviceNo, FloorCode, RoomCode, PurchaseDate, OutWarranty, Owner, Desciption, Status1, IPv4_1, IPv4_2 } = req.body
     try {
         const pool = await poolPromise;
         const result = await pool.request().query(`
-            INSERT INTO MA.DevicesMaster (JobTypeCode, CategoryCode, DeviceNo, FloorCode, RoomCode, PurchaseDate, OutWarranty, Owner, Desciption, BuyPrice, Status1, Status2)
-            VALUES ('${JobTypeCode}', '${CategoryCode}', '${DeviceNo}', '${FloorCode}', '${RoomCode}', '${PurchaseDate}', '${OutWarranty}', '${Owner}', '${Desciption}', 0, '${Status1}', '')
+            INSERT INTO MA.DevicesMaster (JobTypeCode, CategoryCode, DeviceNo, FloorCode, RoomCode, PurchaseDate, OutWarranty, Owner, Desciption, BuyPrice, Status1, Status2, IPv4_1, IPv4_2)
+            VALUES ('${JobTypeCode}', '${CategoryCode}', '${DeviceNo}', '${FloorCode}', '${RoomCode}', '${PurchaseDate}', '${OutWarranty}', '${Owner}', '${Desciption}', 0, '${Status1}', '', '${IPv4_1}', '${IPv4_2}')
               `);
         res.json({ result: constants.kResultOk });
     } catch (error) {

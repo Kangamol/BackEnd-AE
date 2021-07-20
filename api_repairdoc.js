@@ -11,9 +11,10 @@ router.get("/getFilterDeviceNo", async(req, res) => {
     try {
         const pool = await poolPromise;
         const result = await pool.request().query(`
-        SELECT	JobTypeCode, CategoryCode, FloorCode, RoomCode, DeviceNo
-        FROM	MA.DevicesMaster
-        WHERE	Status1 = '0'
+        SELECT		JobTypeCode, CategoryCode, FloorCode, RoomCode, DeviceNo
+        FROM		MA.DevicesMaster
+        WHERE		Status1 = '0'
+        Order BY	JobTypeCode, CategoryCode, FloorCode, RoomCode, DeviceNo
             `);
         res.json({ result: result.recordset, message: constants.kResultOk });
     } catch (error) {
@@ -24,14 +25,31 @@ router.get("/getFilterDeviceNo", async(req, res) => {
 router.post("/insertrepairdoc", async(req, res) => {
     // console.log(req.body)
     try {
-        const { BrokenDes, CategoryCode, ContactPerson, DeviceNo, DueDate, FloorCode, JobTypeCode, RoomCode, Status, Tel } = req.body
+        const { BrokenDes, CategoryCode, ContactPerson, DeviceNo, DueDate, FloorCode, JobTypeCode, RoomCode, Status, Tel, ApprovStatus } = req.body
         const pool = await poolPromise;
         const result = await pool.request().query(`
-                INSERT INTO MA.RepairDocument ([JobTypeCode], [CategoryCode], [FloorCode], [RoomCode], [DeviceNo], [ContactPerson], [Tel], [JobDate], 
-                            [DueDate], [BrokenDes], [RepairDes], [RepairPrice], [PartPrice], [Status])
+                INSERT INTO MA.RepairDocument ([BillDoc], [JobTypeCode], [CategoryCode], [FloorCode], [RoomCode], [DeviceNo], [ContactPerson], [Tel], [JobDate], 
+                            [DueDate], [BrokenDes], [RepairDes], [RepairPrice], [PartPrice], [Status], [ApprovStatus])
                 VALUES
-                            ('${JobTypeCode}', '${CategoryCode}', '${FloorCode}', '${RoomCode}', '${DeviceNo}', '${ContactPerson}',
-                             '${Tel}', GETDATE(), '${DueDate}', '${BrokenDes}', '', 0, 0, '${Status}')
+                             (  (SELECT	((SELECT 'RD'+ FORMAT(GETDATE(), 'yy') + FORMAT(GETDATE(), 'MM'))
+                                + ISNULL(RIGHT('0000' + CAST(CAST(RIGHT(MAX(RD.BillDoc),5) AS INT)+1 AS VARCHAR),5),'00001'))AS maxDoc 
+                                FROM	MA.RepairDocument RD
+                                WHERE	LEFT(RD.BillDoc,6) = (SELECT 'RD'+ FORMAT(GETDATE(), 'yy') + FORMAT(GETDATE(), 'MM'))),
+                                '${JobTypeCode}',
+                                '${CategoryCode}',
+                                '${FloorCode}',
+                                '${RoomCode}',
+                                '${DeviceNo}',
+                                '${ContactPerson}',
+                                '${Tel}',
+                                GETDATE(),
+                                '${DueDate}',
+                                '${BrokenDes}',
+                                '',
+                                0,
+                                0,
+                                '${Status}',
+                                '${ApprovStatus}')
         `)
         res.json({ message: constants.kResultOk, result: result.recordset })
     } catch {
@@ -43,14 +61,168 @@ router.get("/getbillrepairdoc", async(req, res) => {
     try {
         const pool = await poolPromise;
         const result = await pool.request().query(`
-            SELECT	BillID, JT.JobTypeCode, JT.JobTypeName, CategoryName, RA.RoomName, DeviceNo, ContactPerson, JobDate, BrokenDes, Status,
-                    RD.PartPrice, RD.RepairPrice, RD.RepairDes, RD.DueDate
+        SELECT	BillID, BillDoc, JT.JobTypeCode, JT.JobTypeName, CategoryName, RA.RoomName, DeviceNo,
+        ContactPerson, (EM.EmpFullName)AS ContactPersonName, BrokenDes, RD.Status, FloorName,
+        RD.PartPrice, RD.RepairPrice, RD.RepairDes, Approver, ApprovStatus, (EA.EmpFullName)AS  ApprovName, Tel,
+        CASE DATEPART(WEEKDAY,RD.JobDate)
+                    WHEN 1 THEN 'อา'
+                    WHEN 2 THEN 'จ'
+                    WHEN 3 THEN 'อ'
+                    WHEN 4 THEN 'พ'
+                    WHEN 5 THEN 'พฤ'
+                    WHEN 6 THEN 'ศ'
+                    WHEN 7 THEN 'ส'
+                    ELSE ''
+        END dowJobDate, JobDate,
+        CASE DATEPART(WEEKDAY,RD.DueDate)
+                    WHEN 1 THEN 'อา'
+                    WHEN 2 THEN 'จ'
+                    WHEN 3 THEN 'อ'
+                    WHEN 4 THEN 'พ'
+                    WHEN 5 THEN 'พฤ'
+                    WHEN 6 THEN 'ศ'
+                    WHEN 7 THEN 'ส'
+                    ELSE ''
+        END dowDueDate, RD.DueDate,
+        CASE DATEPART(WEEKDAY,RD.FinishDate)
+                    WHEN 1 THEN 'อา'
+                    WHEN 2 THEN 'จ'
+                    WHEN 3 THEN 'อ'
+                    WHEN 4 THEN 'พ'
+                    WHEN 5 THEN 'พฤ'
+                    WHEN 6 THEN 'ศ'
+                    WHEN 7 THEN 'ส'
+                    ELSE ''
+        END dowFinishDate, FinishDate, Notifier, (EN.EmpFullName)AS NotifierName,
+        ('http://172.16.0.15/aeweb/picture/'+REPLACE(SUBSTRING(EM.EmpPict,4,200),'\','/'))AS ContactPersonPict,
+        ('http://172.16.0.15/aeweb/picture/'+REPLACE(SUBSTRING(EN.EmpPict,4,200),'\','/'))AS NotifierPict,
+        ('http://172.16.0.15/aeweb/picture/'+REPLACE(SUBSTRING(EA.EmpPict,4,200),'\','/'))AS ApproverPict,
+		SUBSTRING((SELECT CONVERT(VARCHAR, RD.JobDate, 108)),1,5)AS JobDateTime,
+		SUBSTRING((SELECT CONVERT(VARCHAR, RD.FinishDate, 108)),1,5)AS FinishDateTime
+        FROM	MA.RepairDocument RD
+                LEFT JOIN MA.JobType JT ON RD.JobTypeCode = JT.JobTypeCode
+                LEFT JOIN MA.Category CG ON RD.JobTypeCode = CG.JobTypeCode AND RD.CategoryCode = CG.CategoryCode
+                LEFT JOIN MA.FloorAE FA ON RD.FloorCode = FA.FloorCode
+                LEFT JOIN MA.RoomAE RA ON RD.FloorCode = RA.FloorCode AND RD.RoomCode = RA.RoomCode
+                LEFT JOIN Employee EM ON RD.ContactPerson = EM.EmpCode
+                LEFT JOIN Employee EA ON RD.Approver = EA.EmpCode
+                LEFT JOIN Employee EN ON RD.Notifier = EN.EmpCode 
+        ORDER BY  RD.Status , RD.JobDate
+        `)
+        res.json({ result: result.recordset, message: constants.kResultOk });
+    } catch {
+        res.json({ message: constants.kResultNok });
+    }
+})
+
+router.get("/getbillrepairdocdetail/:id", async(req, res) => {
+    const { id } = req.params
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request().query(`
+            SELECT	BillID, BillDoc, JT.JobTypeCode, JT.JobTypeName, CategoryName, RA.RoomName, DeviceNo,
+                    ContactPerson, (EM.EmpFullName)AS ContactPersonName, BrokenDes, RD.Status, FloorName,
+                    RD.PartPrice, RD.RepairPrice, RD.RepairDes, Approver, ApprovStatus, (EA.EmpFullName)AS  ApprovName,
+                    CASE DATEPART(WEEKDAY,RD.JobDate)
+                                WHEN 1 THEN 'อา'
+                                WHEN 2 THEN 'จ'
+                                WHEN 3 THEN 'อ'
+                                WHEN 4 THEN 'พ'
+                                WHEN 5 THEN 'พฤ'
+                                WHEN 6 THEN 'ศ'
+                                WHEN 7 THEN 'ส'
+                                ELSE ''
+                    END dowJobDate, JobDate,
+                    CASE DATEPART(WEEKDAY,RD.DueDate)
+                                WHEN 1 THEN 'อา'
+                                WHEN 2 THEN 'จ'
+                                WHEN 3 THEN 'อ'
+                                WHEN 4 THEN 'พ'
+                                WHEN 5 THEN 'พฤ'
+                                WHEN 6 THEN 'ศ'
+                                WHEN 7 THEN 'ส'
+                                ELSE ''
+                    END dowDueDate, RD.DueDate,
+                    CASE DATEPART(WEEKDAY,RD.FinishDate)
+                                WHEN 1 THEN 'อา'
+                                WHEN 2 THEN 'จ'
+                                WHEN 3 THEN 'อ'
+                                WHEN 4 THEN 'พ'
+                                WHEN 5 THEN 'พฤ'
+                                WHEN 6 THEN 'ศ'
+                                WHEN 7 THEN 'ส'
+                                ELSE ''
+                    END dowFinishDate, FinishDate, Notifier, (EN.EmpFullName)AS NotifierName,
+                    ('http://172.16.0.15/aeweb/picture/'+REPLACE(SUBSTRING(EM.EmpPict,4,200),'\','/'))AS ContactPersonPict,
+					('http://172.16.0.15/aeweb/picture/'+REPLACE(SUBSTRING(EN.EmpPict,4,200),'\','/'))AS NotifierPict,
+					('http://172.16.0.15/aeweb/picture/'+REPLACE(SUBSTRING(EA.EmpPict,4,200),'\','/'))AS ApproverPict,
+                    SUBSTRING((SELECT CONVERT(VARCHAR, RD.JobDate, 108)),1,5)AS JobDateTime,
+                    SUBSTRING((SELECT CONVERT(VARCHAR, RD.FinishDate, 108)),1,5)AS FinishDateTime
             FROM	MA.RepairDocument RD
-                    JOIN MA.JobType JT ON RD.JobTypeCode = JT.JobTypeCode
-                    JOIN MA.Category CG ON RD.JobTypeCode = CG.JobTypeCode AND RD.CategoryCode = CG.CategoryCode
-                    JOIN MA.FloorAE FA ON RD.FloorCode = FA.FloorCode
-                    JOIN MA.RoomAE RA ON RD.FloorCode = RA.FloorCode AND RD.RoomCode = RA.RoomCode
-            ORDER BY RD.JobDate DESC , Status 
+                    LEFT JOIN MA.JobType JT ON RD.JobTypeCode = JT.JobTypeCode
+                    LEFT JOIN MA.Category CG ON RD.JobTypeCode = CG.JobTypeCode AND RD.CategoryCode = CG.CategoryCode
+                    LEFT JOIN MA.FloorAE FA ON RD.FloorCode = FA.FloorCode
+                    LEFT JOIN MA.RoomAE RA ON RD.FloorCode = RA.FloorCode AND RD.RoomCode = RA.RoomCode
+                    LEFT JOIN Employee EM ON RD.ContactPerson = EM.EmpCode
+                    LEFT JOIN Employee EA ON RD.Approver = EA.EmpCode
+                    LEFT JOIN Employee EN ON RD.Notifier = EN.EmpCode
+            WHERE BillID = ${ id }
+            ORDER BY RD.Status, RD.JobDate DESC  
+        `)
+        res.json({ result: result.recordset, message: constants.kResultOk });
+    } catch {
+        res.json({ message: constants.kResultNok });
+    }
+})
+
+router.post("/gethistorybillrepair", async(req, res) => {
+    const { DeviceNo } = req.body
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request().query(`
+            SELECT	BillID, BillDoc, JT.JobTypeCode, JT.JobTypeName, CategoryName, RA.RoomName, DeviceNo,
+                    ContactPerson, (EM.EmpFullName)AS ContactPersonName, BrokenDes, RD.Status, FloorName,
+                    RD.PartPrice, RD.RepairPrice, RD.RepairDes, Approver, ApprovStatus, (EA.EmpFullName)AS  ApprovName,
+                    CASE DATEPART(WEEKDAY,RD.JobDate)
+                                WHEN 1 THEN 'อา'
+                                WHEN 2 THEN 'จ'
+                                WHEN 3 THEN 'อ'
+                                WHEN 4 THEN 'พ'
+                                WHEN 5 THEN 'พฤ'
+                                WHEN 6 THEN 'ศ'
+                                WHEN 7 THEN 'ส'
+                                ELSE ''
+                    END dowJobDate, JobDate,
+                    CASE DATEPART(WEEKDAY,RD.DueDate)
+                                WHEN 1 THEN 'อา'
+                                WHEN 2 THEN 'จ'
+                                WHEN 3 THEN 'อ'
+                                WHEN 4 THEN 'พ'
+                                WHEN 5 THEN 'พฤ'
+                                WHEN 6 THEN 'ศ'
+                                WHEN 7 THEN 'ส'
+                                ELSE ''
+                    END dowDueDate, RD.DueDate,
+                    CASE DATEPART(WEEKDAY,RD.FinishDate)
+                                WHEN 1 THEN 'อา'
+                                WHEN 2 THEN 'จ'
+                                WHEN 3 THEN 'อ'
+                                WHEN 4 THEN 'พ'
+                                WHEN 5 THEN 'พฤ'
+                                WHEN 6 THEN 'ศ'
+                                WHEN 7 THEN 'ส'
+                                ELSE ''
+                    END dowFinishDate, FinishDate, Notifier, (EN.EmpFullName)AS NotifierName
+            FROM	MA.RepairDocument RD
+                    LEFT JOIN MA.JobType JT ON RD.JobTypeCode = JT.JobTypeCode
+                    LEFT JOIN MA.Category CG ON RD.JobTypeCode = CG.JobTypeCode AND RD.CategoryCode = CG.CategoryCode
+                    LEFT JOIN MA.FloorAE FA ON RD.FloorCode = FA.FloorCode
+                    LEFT JOIN MA.RoomAE RA ON RD.FloorCode = RA.FloorCode AND RD.RoomCode = RA.RoomCode
+                    LEFT JOIN Employee EM ON RD.ContactPerson = EM.EmpCode
+                    LEFT JOIN Employee EA ON RD.Approver = EA.EmpCode
+                    LEFT JOIN Employee EN ON RD.Notifier = EN.EmpCode
+                    WHERE DeviceNo = '${ DeviceNo }' AND RD.Status = '3'
+                    ORDER BY RD.JobDate DESC 
         `)
         res.json({ result: result.recordset, message: constants.kResultOk });
     } catch {
@@ -79,8 +251,11 @@ router.get("/getrepairdocmodify/:id", async(req, res) => {
         const { id } = req.params
         const pool = await poolPromise;
         const result = await pool.request().query(`
-        SELECT  JobTypeCode, CategoryCode, FloorCode, RoomCode, DeviceNo, ContactPerson, Tel, DueDate, BrokenDes, RepairDes, RepairPrice, PartPrice, Status
-        FROM	MA.RepairDocument
+        SELECT  JobTypeCode, CategoryCode, FloorCode, RoomCode,
+				DeviceNo, ContactPerson, Tel, DueDate, BrokenDes,
+				RepairDes, RepairPrice, PartPrice, RD.Status, (EN.EmpFullName)AS ContactPersonName
+        FROM	MA.RepairDocument RD LEFT JOIN Employee EN 
+				ON RD.ContactPerson = EN.EmpCode
         WHERE	BillID = ${ id }  
             `);
         res.json(result.recordset)
@@ -104,7 +279,7 @@ router.post("/edit-repairdoc/:id", async(req, res) => {
                 RoomCode = '${RoomCode}',
                 DeviceNo =  '${DeviceNo}',
                 ContactPerson =  '${ContactPerson}',
-                Tel= '',
+                Tel= '${Tel}',
                 DueDate= '${DueDate}',
                 BrokenDes = '${BrokenDes}'
         WHERE	BillID = ${id}
@@ -116,7 +291,7 @@ router.post("/edit-repairdoc/:id", async(req, res) => {
 });
 
 router.post("/updatestatus", async(req, res) => {
-    const { BillID, status, repairCost, partsCost, description } = req.body
+    const { BillID, status, repairCost, partsCost, description, Notifier } = req.body
         // console.log(BillID, status, repairCost, partsCost, description)
     try {
         const pool = await poolPromise;
@@ -125,7 +300,8 @@ router.post("/updatestatus", async(req, res) => {
                         Status = '${status}',
                         PartPrice = ${partsCost},
                         RepairPrice = ${repairCost},
-                        RepairDes = '${description}'
+                        RepairDes = '${description}',
+                        Notifier = '${Notifier}'
             WHERE	BillID = ${BillID}
         `)
         res.json({ result: constants.kResultOk });
@@ -169,3 +345,22 @@ router.post("/updatefinishdate", async(req, res) => {
         res.json({ result: constants.kResultNok })
     }
 })
+
+router.post("/updateapprove", async(req, res) => {
+    const { ID, Approver} = req.body;
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request().query(`
+            UPDATE MA.RepairDocument SET ApprovStatus = '1', Approver = '${ Approver }'
+            WHERE BillID = ${ ID }
+        `)
+        res.json({ result: constants.kResultOk })
+    } catch {
+        res.json({ result: constants.kResultNok })
+    }
+})
+
+
+
+
+

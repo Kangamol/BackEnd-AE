@@ -68,7 +68,7 @@ router.get("/getmouldbill", async(req, res) => {
                 END dowReturnDate,
                 MM.DepartCode, AM.DepartName, DueDate,
                 (ISNULL(DATEDIFF(DAY, IIF(MM.ReturnDate IS NULL, GETDATE(), MM.ReturnDate), MM.DueDate), 0))AS LateDate, remark,
-                'http://172.16.0.15/aeweb/picture/'+REPLACE(SUBSTRING((SELECT TOP(1)NewPict FROM ProductMaster WHERE CastingNo = MM.ModelNo),4,200),'\','/') NewPict
+                'http://172.16.0.15/aeweb/picture/PICTURE3/Art Event Logo2.jpg'AS NewPict
         FROM	Mould.MouldLentMaster MM 
                 LEFT JOIN Employee EO ON MM.Owner = EO.EmpCode
                 LEFT JOIN Mould.JobTypeName JN ON MM.JobType = JN.JobType
@@ -76,7 +76,7 @@ router.get("/getmouldbill", async(req, res) => {
                 LEFT JOIN Employee ET ON MM.ReturnPerson = ET.EmpCode
                 LEFT JOIN Employee EP ON MM.PreparePerson = EP.EmpCode
                 LEFT JOIN Mould.AEDepartment AM ON MM.DepartCode = AM.DepartCode
-                ORDER BY  MM.Status, MM.BillDate DESC
+        ORDER BY  MM.Status, MM.BillDate DESC
             `);
         res.json(result.recordset)
     } catch (error) {
@@ -85,8 +85,9 @@ router.get("/getmouldbill", async(req, res) => {
 })
 
 
-router.get("/getmouldbillDetail/:ModelNo", async(req, res) => {
-    const { ModelNo } = req.params
+
+router.post("/getmouldbillDetail", async(req, res) => {
+    const { ModelNo } = req.body
     // console.log(ModelNo);
     try {
         const pool = await poolPromise;
@@ -129,7 +130,7 @@ router.get("/getmouldordernumber-ex", async(req, res) => {
         const pool = await poolPromise;
         const result = await pool.request().query(`
         SELECT	OrderNumber FROM OrderMaster
-        WHERE	YEAR(OrderDate) >= 2021 AND LEFT(OrderNumber, 5) != 'CH-M-' AND Status = '2'    
+        WHERE	YEAR(OrderDate) >= 2021 AND LEFT(OrderNumber, 5) = 'CH-M-' AND Status = '2'   
             `);
         res.json(result.recordset)
     } catch (error) {
@@ -143,13 +144,13 @@ router.post("/getmodelmould", async(req, res) => {
     try {
         const pool = await poolPromise;
         const result = await pool.request().query(`
-            SELECT	NULL AS checkBox, (CastingNo)AS ModelNo, 'http://172.16.0.15/aeweb/picture/'+REPLACE(SUBSTRING(NewPict,4,200),'\','/') NewPict,
-            (0) AS Qty, ('') AS JobType, ('') AS remark
-            FROM
-            (SELECT	DISTINCT(PM.CastingNo), 
-                    (SELECT TOP(1)NewPict FROM ProductMaster WHERE CastingNo = PM.CastingNo)AS NewPict
-            FROM	OrderDetail OD JOIN ProductMaster PM ON OD.ProductID = PM.ProductID
-            WHERE	OD.OrderNumber = '${OrderNumber}')AS A
+        SELECT	NULL AS checkBox, (CastingNo)AS ModelNo, 'http://172.16.0.15/aeweb/picture/'+REPLACE(SUBSTRING(NewPict,4,200),'\','/') NewPict,
+        (0) AS Qty, ('') AS JobType, ('') AS remark
+        FROM
+        (SELECT	DISTINCT(PM.CastingNo), 
+                (SELECT ModelPicture FROM ModelMasterNew WHERE ModelNumber = PM.CastingNo)AS NewPict
+        FROM	OrderDetail OD JOIN ProductMaster PM ON OD.ProductID = PM.ProductID
+        WHERE	OD.OrderNumber = '${ OrderNumber }' AND CastingNo != '')AS A
             `);
         res.json(result.recordset)
     } catch (error) {
@@ -164,13 +165,8 @@ router.get("/getmodelmouldall", async(req, res) => {
     try {
         const pool = await poolPromise;
         const result = await pool.request().query(`
-                SELECT ModelNo, 'http://172.16.0.15/aeweb/picture/'+REPLACE(SUBSTRING(NewPict,4,200),'\','/') NewPict FROM 
-                (
-                    SELECT	(CastingNo)AS ModelNo, 
-                            (SELECT TOP(1) NewPict FROM ProductMaster WHERE CastingNo = PM.CastingNo)AS NewPict 
-                    FROM ProductMaster PM
-                    WHERE	CastingNo != ''
-                    GROUP BY CastingNo)AS ModelNo
+            SELECT (ModelNumber)AS ModelNo, 'http://172.16.0.15/aeweb/picture/'+REPLACE(SUBSTRING(ModelPicture,4,200),'\','/') NewPict
+            FROM ModelMasterNew
             `);
         res.json(result.recordset)
     } catch (error) {
@@ -180,7 +176,7 @@ router.get("/getmodelmouldall", async(req, res) => {
 
 
 
-//ส่ง OrderNumber มาเพื่อไปดึง แม่พิมพ์มา
+
 router.get("/getjobmould", async(req, res) => {
     try {
         const pool = await poolPromise;
@@ -376,5 +372,20 @@ router.post("/ModifyBillMould", async(req, res) => {
         res.json({ result: constants.kResultNok });
     }
 });
+
+router.post("/selectpictmould", async(req, res) => {
+    const { ModelNo } = req.body
+    try {
+        const pool = await poolPromise;
+            const result = await pool.request().query(`
+            SELECT 'http://172.16.0.15/aeweb/picture/'+REPLACE(SUBSTRING(ModelPicture,4,200),'\','/')AS NewPict FROM ModelMasterNew
+            WHERE	ModelNumber = '${ModelNo}'
+        `);
+        res.json(result.recordset);
+    } catch (error) {
+        res.json({ result: constants.kResultNok });
+    }
+});
+
 
 

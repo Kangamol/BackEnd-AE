@@ -14,28 +14,23 @@ router.post("/login", async(req, res) => {
         const pool = await poolPromise
         const result = await pool.request()
             .query(`
-                SELECT  EM.EmpCode, EM.Password, EM.EmpFullName, EM.TokenSQL, EM.PolicyCode, PN.PolicyName
-                FROM
-                (SELECT	EM.EmpCode, Password, EM.EmpFullName, ((CONVERT(float, EM.EmpCode)*151)/4)AS TokenSQL, ISNULL(EP.PolicyCode, '01')AS PolicyCode
-                FROM	Employee EM LEFT JOIN MA.EmpPolicy EP ON EM.EmpCode = EP.EmpCode
-                WHERE	EM.EmpCode = '${username}'
-                )AS		EM LEFT JOIN MA.PolicyName PN ON EM.PolicyCode = PN.PolicyCode
+            SELECT  EM.EmpCode, EM.Password, EM.EmpFullName, EM.TokenSQL, EM.PolicyCode, PN.PolicyName, 
+            'http://172.16.0.15/aeweb/picture/'+REPLACE(SUBSTRING(EmpPict ,4,200),'\','/') AS EmpPict, (ProductionTeam) AS Factory
+            FROM
+            (SELECT	EM.EmpCode, Password, EM.EmpFullName, ((CONVERT(float, EM.EmpCode)*151)/4)AS TokenSQL, ISNULL(EP.PolicyCode, '01')AS PolicyCode, EM.EmpPict, EM.ProductionTeam
+            FROM	Employee EM LEFT JOIN MA.EmpPolicy EP ON EM.EmpCode = EP.EmpCode
+            WHERE	EM.EmpCode = '${username}'
+            )AS		EM LEFT JOIN MA.PolicyName PN ON EM.PolicyCode = PN.PolicyCode
+
         `);
-        //     .query(`
-        // SELECT	EM.EmpCode, Password, EM.EmpFullName, ((CONVERT(float, EM.EmpCode)*151)/4)AS TokenSQL, EP.PolicyCode, PN.PolicyName
-        // FROM	Employee EM 
-        //         JOIN MA.EmpPolicy EP ON EM.EmpCode = EP.EmpCode
-        //         LEFT JOIN MA.PolicyName PN ON EP.PolicyCode = PN.PolicyCode
-        // WHERE	EM.EmpCode = '${username}'
-        // `);
 
 
         // เอาค่า result มาแยก
-        const { EmpCode, Password, EmpFullName, TokenSQL, PolicyCode, PolicyName } = result.recordset[0];
+        const { EmpCode, Password, EmpFullName, TokenSQL, PolicyCode, PolicyName, EmpPict, Factory } = result.recordset[0];
         // เช็คUsername และ password
         if (EmpCode) {
             if (Password == password) {
-                res.json({ result: constants.kResultOk, fullName: EmpFullName, token: TokenSQL, PolicyCode: PolicyCode, PolicyName: PolicyName });
+                res.json({ result: constants.kResultOk, fullName: EmpFullName, token: TokenSQL, PolicyCode: PolicyCode, PolicyName: PolicyName, EmpPict: EmpPict, Factory: Factory });
             } else {
                 res.json({ result: "Incorrect Password" });
             }
