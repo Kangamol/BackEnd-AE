@@ -245,6 +245,31 @@ FROM (
 })
 
 
+router.get("/reportworkerweightgold", async(req, res) => {
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request().query(`
+            SELECT  *, (((SendTotalWeight + MatTotalWeight) - ReturnWeight) / ReturnWeight * 100)AS perDiff
+            FROM (
+                    SELECT	WM.Bill_ID, BillNumber, BillDate, EmpFullName,ISNULL(WBM.InvCode, '-')AS InvCode, ISNULL(MatTotalWeight, 0)AS MatTotalWeight,
+                            WD.ItemNo, WD.JobNumber, WD.SendQty, PM.ProductID, PM.ProductCode, PM.NewPict, JO.OrderNumber,
+                            (WD.SendWeight)AS SendTotalWeight, IIF(WD.SendWeight = 0, 0, (WD.SendQty / WD.SendWeight))AS [SendWeightPerItem],
+                            (SELECT SUM(RvTotalWeight) FROM WorkerBillDetailRv WHERE WorkerBillDetailRv.Bill_ID = WD.Bill_ID AND WorkerBillDetailRv.ItemNo = WD.ItemNo)AS ReturnWeight
+                    FROM	WorkerBillMaster WM LEFT JOIN WorkerBillMaterial WBM ON WM.Bill_ID =  WBM.Bill_ID
+                            JOIN WorkerBillDetail WD ON WM.Bill_ID = WD.Bill_ID
+                            LEFT JOIN JobOrder JO ON JO.JobNumber = WD.JobNumber
+                            LEFT JOIN ProductMaster PM ON JO.ProductID = PM.ProductID
+                            LEFT JOIN Employee ON Receiver = EmpCode
+                    WHERE	WM.Receiver IN ('1598', '2314', '1303', '2183', '1328', '1945', '2181', '1991')
+                            AND WM.BillDate BETWEEN '20210526' AND '20210625'
+            ) AS AA
+            ORDER BY  InvCode DESC, BillDate, Bill_ID, ItemNo
+        `)
+        res.json(result.recordset)
+    } catch (error) {
+        res.json({ result: error })
+    }
+})
 
 
 

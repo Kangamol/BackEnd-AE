@@ -12,9 +12,9 @@ let checkSendLine = true
 
 setInterval( async() => {
     let timeCheck = new Date();
-    console.log(timeCheck - 1)
-    console.log(timeCheck.getHours())
-    console.log(timeCheck.getMinutes())
+    // console.log(timeCheck - 1)
+    // console.log(timeCheck.getHours())
+    // console.log(timeCheck.getMinutes())
     if(timeCheck.getHours() === 8 && timeCheck.getMinutes() >= 36 && timeCheck.getMinutes() <=36 && checkSendLine) {
          try {
             const pool = await poolPromise;
