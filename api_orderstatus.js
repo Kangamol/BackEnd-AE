@@ -183,7 +183,7 @@ router.post("/getproductbyorder", async(req, res) => {
     try {
         const pool = await poolPromise;
         const result = await pool.request().query(`
-            SELECT 'http://172.16.0.15/aeweb/picture/'+REPLACE(SUBSTRING(PM.NewPict,4,200),'\','/') NewPict, PM.ProductID, PM.ProductCode, Qty
+            SELECT 'http://172.16.0.5:3000/picture/'+REPLACE(SUBSTRING(PM.NewPict,4,200),'\','/') NewPict, PM.ProductID, PM.ProductCode, Qty
             FROM	OrderDetail OD JOIN ProductMaster PM ON OD.ProductID = PM.ProductID
             WHERE   OrderNumber = '${ OrderNumber }'
             `);
@@ -230,7 +230,7 @@ router.post("/getorderdetailstatus", async(req, res) => {
         ISNULL([21], 0)AS [P21], ISNULL([22], 0)AS [P22]
 FROM (
         Select	OrderNumber ,JO.JobNumber, JO.ProductID, OrderItemNo, JobQty, JO.ProductCode, PDProcessCode, (JS.In_Q + JS.Out_Q + JS.Receive_Q + JS.Send_Q) TotalDP,
-                'http://172.16.0.15/aeweb/picture/'+REPLACE(SUBSTRING(NewPict,4,200),'\','/') NewPict,
+                'http://172.16.0.5:3000/picture/'+REPLACE(SUBSTRING(NewPict,4,200),'\','/') NewPict,
                 ISNULL(( SELECT SUM(qBD.Qty) FROM qaBillDetail qBD
                 WHERE qBD.OrderNumber = JO.OrderNumber AND qBD.OrderItemNo = JO.OrderItemNo), 0)AS TotalQA
         FROM	JobOrder JO LEFT join JobStatus JS ON JO.JobNumber = JS.JobNumber

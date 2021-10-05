@@ -68,7 +68,7 @@ router.get("/getmouldbill", async(req, res) => {
                 END dowReturnDate,
                 MM.DepartCode, AM.DepartName, DueDate,
                 (ISNULL(DATEDIFF(DAY, IIF(MM.ReturnDate IS NULL, GETDATE(), MM.ReturnDate), MM.DueDate), 0))AS LateDate, remark,
-                'http://172.16.0.15/aeweb/picture/PICTURE3/Art Event Logo2.jpg'AS NewPict
+                'http://172.16.0.5:3000/picture/PICTURE3/Art Event Logo2.jpg'AS NewPict
         FROM	Mould.MouldLentMaster MM 
                 LEFT JOIN Employee EO ON MM.Owner = EO.EmpCode
                 LEFT JOIN Mould.JobTypeName JN ON MM.JobType = JN.JobType
@@ -76,6 +76,87 @@ router.get("/getmouldbill", async(req, res) => {
                 LEFT JOIN Employee ET ON MM.ReturnPerson = ET.EmpCode
                 LEFT JOIN Employee EP ON MM.PreparePerson = EP.EmpCode
                 LEFT JOIN Mould.AEDepartment AM ON MM.DepartCode = AM.DepartCode
+        WHERE	ISNULL((DATEPART(DAYOFYEAR, GETDATE()) - DATEPART(DAYOFYEAR, ReturnDate)),0)  < 30
+        ORDER BY  MM.Status, MM.BillDate DESC
+            `);
+        res.json(result.recordset)
+    } catch (error) {
+        res.json({ result: constants.kResultNok })
+    }
+})
+
+router.get("/getmouldbill/:ModelNo", async(req, res) => {
+    const { ModelNo } = req.params
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request().query(`
+        SELECT	MM.ID, MM.DocID, MM.BillDate, MM.Owner, (EO.EmpFullName)AS OwnerFullName, 
+                MM.OrderNumber, MM.ModelNo, MM.Qty, MM.JobType, JN.JobTypeName,
+                MM.Receiver, (ER.EmpFullName)AS ReceiverFullName, ReceiveDate,
+                MM.ReturnPerson, (ET.EmpFullName)AS ReturnPersonFullName,MM.ReturnDate, 
+                MM.RepairModelDesc, MM.Status, DATEDIFF(DAY, MM.BillDate, IIF(MM.ReturnDate IS NULL, GETDATE(), MM.ReturnDate))AS TotalDate,
+                MM.PrepareDate, MM.PreparePerson, (EP.EmpFullName)AS PrepareFullName,
+                CASE DATEPART(WEEKDAY,MM.BillDate)
+                    WHEN 1 THEN 'อา'
+                    WHEN 2 THEN 'จ'
+                    WHEN 3 THEN 'อ'
+                    WHEN 4 THEN 'พ'
+                    WHEN 5 THEN 'พฤ'
+                    WHEN 6 THEN 'ศ'
+                    WHEN 7 THEN 'ส'
+                    ELSE ''
+                END dowBillDate,
+                CASE DATEPART(WEEKDAY,MM.PrepareDate)
+                    WHEN 1 THEN 'อา'
+                    WHEN 2 THEN 'จ'
+                    WHEN 3 THEN 'อ'
+                    WHEN 4 THEN 'พ'
+                    WHEN 5 THEN 'พฤ'
+                    WHEN 6 THEN 'ศ'
+                    WHEN 7 THEN 'ส'
+                    ELSE ''
+                END dowPrepareDate,
+                CASE DATEPART(WEEKDAY,MM.DueDate)
+                    WHEN 1 THEN 'อา'
+                    WHEN 2 THEN 'จ'
+                    WHEN 3 THEN 'อ'
+                    WHEN 4 THEN 'พ'
+                    WHEN 5 THEN 'พฤ'
+                    WHEN 6 THEN 'ศ'
+                    WHEN 7 THEN 'ส'
+                    ELSE ''
+                END dowDueDate,
+                CASE DATEPART(WEEKDAY,MM.ReceiveDate)
+                    WHEN 1 THEN 'อา'
+                    WHEN 2 THEN 'จ'
+                    WHEN 3 THEN 'อ'
+                    WHEN 4 THEN 'พ'
+                    WHEN 5 THEN 'พฤ'
+                    WHEN 6 THEN 'ศ'
+                    WHEN 7 THEN 'ส'
+                    ELSE ''
+                END dowReceiveDate,
+                CASE DATEPART(WEEKDAY,MM.ReturnDate)
+                    WHEN 1 THEN 'อา'
+                    WHEN 2 THEN 'จ'
+                    WHEN 3 THEN 'อ'
+                    WHEN 4 THEN 'พ'
+                    WHEN 5 THEN 'พฤ'
+                    WHEN 6 THEN 'ศ'
+                    WHEN 7 THEN 'ส'
+                    ELSE ''
+                END dowReturnDate,
+                MM.DepartCode, AM.DepartName, DueDate,
+                (ISNULL(DATEDIFF(DAY, IIF(MM.ReturnDate IS NULL, GETDATE(), MM.ReturnDate), MM.DueDate), 0))AS LateDate, remark,
+                'http://172.16.0.5:3000/picture/PICTURE3/Art Event Logo2.jpg'AS NewPict
+        FROM	Mould.MouldLentMaster MM 
+                LEFT JOIN Employee EO ON MM.Owner = EO.EmpCode
+                LEFT JOIN Mould.JobTypeName JN ON MM.JobType = JN.JobType
+                LEFT JOIN Employee ER ON MM.Receiver = ER.EmpCode
+                LEFT JOIN Employee ET ON MM.ReturnPerson = ET.EmpCode
+                LEFT JOIN Employee EP ON MM.PreparePerson = EP.EmpCode
+                LEFT JOIN Mould.AEDepartment AM ON MM.DepartCode = AM.DepartCode
+        WHERE	ModelNo = '${ ModelNo }'
         ORDER BY  MM.Status, MM.BillDate DESC
             `);
         res.json(result.recordset)
@@ -144,7 +225,7 @@ router.post("/getmodelmould", async(req, res) => {
     try {
         const pool = await poolPromise;
         const result = await pool.request().query(`
-        SELECT	NULL AS checkBox, (CastingNo)AS ModelNo, 'http://172.16.0.15/aeweb/picture/'+REPLACE(SUBSTRING(NewPict,4,200),'\','/') NewPict,
+        SELECT	NULL AS checkBox, (CastingNo)AS ModelNo, 'http://172.16.0.5:3000/picture/'+REPLACE(SUBSTRING(NewPict,4,200),'\','/') NewPict,
         (0) AS Qty, ('') AS JobType, ('') AS remark
         FROM
         (SELECT	DISTINCT(PM.CastingNo), 
@@ -165,7 +246,7 @@ router.get("/getmodelmouldall", async(req, res) => {
     try {
         const pool = await poolPromise;
         const result = await pool.request().query(`
-            SELECT (ModelNumber)AS ModelNo, 'http://172.16.0.15/aeweb/picture/'+REPLACE(SUBSTRING(ModelPicture,4,200),'\','/') NewPict
+            SELECT (ModelNumber)AS ModelNo, 'http://172.16.0.5:3000/picture/'+REPLACE(SUBSTRING(ModelPicture,4,200),'\','/') NewPict
             FROM ModelMasterNew
             `);
         res.json(result.recordset)
@@ -378,7 +459,7 @@ router.post("/selectpictmould", async(req, res) => {
     try {
         const pool = await poolPromise;
             const result = await pool.request().query(`
-            SELECT 'http://172.16.0.15/aeweb/picture/'+REPLACE(SUBSTRING(ModelPicture,4,200),'\','/')AS NewPict FROM ModelMasterNew
+            SELECT 'http://172.16.0.5:3000/picture/'+REPLACE(SUBSTRING(ModelPicture,4,200),'\','/')AS NewPict FROM ModelMasterNew
             WHERE	ModelNumber = '${ModelNo}'
         `);
         res.json(result.recordset);

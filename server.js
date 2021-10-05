@@ -13,6 +13,6 @@ app.use(express.static(__dirname + "/uploaded"))
 app.use("/api/v2", require("./api"))
 app.use("/apiwater", require("./api_waterLog"))
 
-app.listen(8081, () => {
-    console.log("Server  Run...Port 8081")
+app.listen(3000, () => {
+    console.log("Server  Run...Port 3000")
 });

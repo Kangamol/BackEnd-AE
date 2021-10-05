@@ -94,11 +94,13 @@ router.get("/getbillrepairdoc", async(req, res) => {
                     WHEN 7 THEN 'ส'
                     ELSE ''
         END dowFinishDate, FinishDate, Notifier, (EN.EmpFullName)AS NotifierName,
-        ('http://172.16.0.15/aeweb/picture/'+REPLACE(SUBSTRING(EM.EmpPict,4,200),'\','/'))AS ContactPersonPict,
-        ('http://172.16.0.15/aeweb/picture/'+REPLACE(SUBSTRING(EN.EmpPict,4,200),'\','/'))AS NotifierPict,
-        ('http://172.16.0.15/aeweb/picture/'+REPLACE(SUBSTRING(EA.EmpPict,4,200),'\','/'))AS ApproverPict,
+        ('http://172.16.0.5:3000/picture/'+REPLACE(SUBSTRING(EM.EmpPict,4,200),'\','/'))AS ContactPersonPict,
+        ('http://172.16.0.5:3000/picture/'+REPLACE(SUBSTRING(EN.EmpPict,4,200),'\','/'))AS NotifierPict,
+        ('http://172.16.0.5:3000/picture/'+REPLACE(SUBSTRING(EA.EmpPict,4,200),'\','/'))AS ApproverPict,
 		SUBSTRING((SELECT CONVERT(VARCHAR, RD.JobDate, 108)),1,5)AS JobDateTime,
-		SUBSTRING((SELECT CONVERT(VARCHAR, RD.FinishDate, 108)),1,5)AS FinishDateTime
+		SUBSTRING((SELECT CONVERT(VARCHAR, RD.FinishDate, 108)),1,5)AS FinishDateTime,
+        CONVERT(VARCHAR, RD.JobDate, 103)AS JobDateShow,
+		CONVERT(VARCHAR, RD.FinishDate, 103)AS FinishDateShow
         FROM	MA.RepairDocument RD
                 LEFT JOIN MA.JobType JT ON RD.JobTypeCode = JT.JobTypeCode
                 LEFT JOIN MA.Category CG ON RD.JobTypeCode = CG.JobTypeCode AND RD.CategoryCode = CG.CategoryCode
@@ -153,9 +155,9 @@ router.get("/getbillrepairdocdetail/:id", async(req, res) => {
                                 WHEN 7 THEN 'ส'
                                 ELSE ''
                     END dowFinishDate, FinishDate, Notifier, (EN.EmpFullName)AS NotifierName,
-                    ('http://172.16.0.15/aeweb/picture/'+REPLACE(SUBSTRING(EM.EmpPict,4,200),'\','/'))AS ContactPersonPict,
-					('http://172.16.0.15/aeweb/picture/'+REPLACE(SUBSTRING(EN.EmpPict,4,200),'\','/'))AS NotifierPict,
-					('http://172.16.0.15/aeweb/picture/'+REPLACE(SUBSTRING(EA.EmpPict,4,200),'\','/'))AS ApproverPict,
+                    ('http://172.16.0.5:3000/picture/'+REPLACE(SUBSTRING(EM.EmpPict,4,200),'\','/'))AS ContactPersonPict,
+					('http://172.16.0.5:3000/picture/'+REPLACE(SUBSTRING(EN.EmpPict,4,200),'\','/'))AS NotifierPict,
+					('http://172.16.0.5:3000/picture/'+REPLACE(SUBSTRING(EA.EmpPict,4,200),'\','/'))AS ApproverPict,
                     SUBSTRING((SELECT CONVERT(VARCHAR, RD.JobDate, 108)),1,5)AS JobDateTime,
                     SUBSTRING((SELECT CONVERT(VARCHAR, RD.FinishDate, 108)),1,5)AS FinishDateTime
             FROM	MA.RepairDocument RD
@@ -337,7 +339,7 @@ router.post("/updatefinishdate", async(req, res) => {
     try {
         const pool = await poolPromise;
         const result = await pool.request().query(`
-            UPDATE MA.RepairDocument SET FinishDate = '${finishDate}'
+            UPDATE MA.RepairDocument SET FinishDate = GETDATE()
             WHERE	BillID = ${ID}
         `)
         res.json({ result: constants.kResultOk })
