@@ -152,6 +152,7 @@ router.get("/getMonthDay/:year/:month", async (req, res) => {
     try {
       const pool = await poolPromise;
       const result = await pool.request().query(`
+<<<<<<< HEAD
         Declare @year int = ${year}, @month int = ${month};
         WITH numbers
         as  
@@ -180,6 +181,31 @@ router.get("/getMonthDay/:year/:month", async (req, res) => {
         (SELECT (exrate * (SELECT COUNT(*) FROM waterLog WHERE waterLimit.deviceCode = waterLog.deviceCode AND year(transDate)=@year and month(transDate)=@month and day(transDate)=day(datefromparts(@year,@month,numbers.value)))) FROM waterLimit WHERE deviceCode = 'WT-11')AS v11,
         (SELECT (exrate * (SELECT COUNT(*) FROM waterLog WHERE waterLimit.deviceCode = waterLog.deviceCode AND year(transDate)=@year and month(transDate)=@month and day(transDate)=day(datefromparts(@year,@month,numbers.value)))) FROM waterLimit WHERE deviceCode = 'WT-12')AS v12
         FROM numbers)AS water
+=======
+            Declare @year int = ${year}, @month int = ${month};
+            WITH numbers
+            as  
+            (
+                Select 1 as value
+                UNion ALL
+                Select value + 1 from numbers
+                where value + 1 <= Day(EOMONTH(datefromparts(@year,@month,1)))
+            )
+            SELECT day(datefromparts(@year,@month,numbers.value)) dayNum, 
+            (select (count(*)*10) from waterLog where year(transDate)=@year and month(transDate)=@month and day(transDate)=day(datefromparts(@year,@month,numbers.value)) and deviceCode='WT-01') v01,
+            (select count(*) from waterLog where year(transDate)=@year and month(transDate)=@month and day(transDate)=day(datefromparts(@year,@month,numbers.value)) and deviceCode='WT-02') v02,
+            (select count(*) from waterLog where year(transDate)=@year and month(transDate)=@month and day(transDate)=day(datefromparts(@year,@month,numbers.value)) and deviceCode='WT-03') v03,
+            (select count(*) from waterLog where year(transDate)=@year and month(transDate)=@month and day(transDate)=day(datefromparts(@year,@month,numbers.value)) and deviceCode='WT-04') v04,
+            (select count(*) from waterLog where year(transDate)=@year and month(transDate)=@month and day(transDate)=day(datefromparts(@year,@month,numbers.value)) and deviceCode='WT-05') v05,
+            (select count(*) from waterLog where year(transDate)=@year and month(transDate)=@month and day(transDate)=day(datefromparts(@year,@month,numbers.value)) and deviceCode='WT-06') v06,
+            (select count(*) from waterLog where year(transDate)=@year and month(transDate)=@month and day(transDate)=day(datefromparts(@year,@month,numbers.value)) and deviceCode='WT-07') v07,
+            (select count(*) from waterLog where year(transDate)=@year and month(transDate)=@month and day(transDate)=day(datefromparts(@year,@month,numbers.value)) and deviceCode='WT-08') v08,
+            (select count(*) from waterLog where year(transDate)=@year and month(transDate)=@month and day(transDate)=day(datefromparts(@year,@month,numbers.value)) and deviceCode='WT-09') v09,
+            (select count(*) from waterLog where year(transDate)=@year and month(transDate)=@month and day(transDate)=day(datefromparts(@year,@month,numbers.value)) and deviceCode='WT-10') v10,
+            (select count(*) from waterLog where year(transDate)=@year and month(transDate)=@month and day(transDate)=day(datefromparts(@year,@month,numbers.value)) and deviceCode='WT-11') v11,
+            (select count(*) from waterLog where year(transDate)=@year and month(transDate)=@month and day(transDate)=day(datefromparts(@year,@month,numbers.value)) and deviceCode='WT-12') v12
+            FROM numbers
+>>>>>>> 2690250108aee348395402b707cc4cea8a40a3e2
             `);
       res.json(result.recordset);
       await pool.close;
@@ -190,6 +216,7 @@ router.get("/getMonthDay/:year/:month", async (req, res) => {
 
 
   // Get sum ToDay
+<<<<<<< HEAD
 // router.get("/getDay/:dayString/:year/:month", async (req, res) => {
 //     const day = req.params.dayString;  
 //     const year = Number(req.params.year);  
@@ -345,3 +372,33 @@ router.get("/getcolorweekend", async (req, res) => {
 
 
 
+=======
+router.get("/getDay/:dayString/:year/:month", async (req, res) => {
+    const day = req.params.dayString;  
+    const year = Number(req.params.year);  
+    const month = Number(req.params.month);
+    try {
+      const pool = await poolPromise;
+      const result = await pool.request().query(`
+              select A.deviceCode, A.daySum, B.monthSum from 
+              (
+              select deviceCode, (count(*)) daySum 
+              from waterLog 
+              where cast(transDate as date) = '${day}'
+              group by deviceCode
+              ) A left join (
+              select deviceCode, (count(*)) monthSum 
+              from waterLog 
+              where year(transDate) = ${year} and month(transDate) = ${month}
+              group by deviceCode) B on A.deviceCode = B.deviceCode    
+            `);
+      res.json(result.recordset);
+      await pool.close;
+    } catch (error) {
+      res.json({ err_message: error.message });
+    }
+  });
+
+
+  
+>>>>>>> 2690250108aee348395402b707cc4cea8a40a3e2
