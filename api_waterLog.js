@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const constants = require("./constant");
 const poolPromise = require("./connect_mssql");
+const constant = require("./constant");
 const lineNotify = require('line-notify-nodejs')('XdMETk7H1UjsI2QnzITlaGFSsvMKSVsmR9MB939Ng9n');
 
 
@@ -145,6 +146,41 @@ setInterval( async() => {
 }, 30000)
 
 
+//เช็คมิเตอร์ Online แล้วเตือนใน Line Backend รับค่าแล้วส่ง Axios มา
+router.get("/alartOnlineDevice/:device_id", async (req, res)=> {
+  const { device_id } = req.params
+  await lineNotify.notify({ message: `${ device_id } Online แล้ว `})
+  res.json(constant.kResultOk)
+});
+
+
+//เช็คมิเตอร์ Offline แล้วเตือนใน Line ตั้งเวลาเช็คจาก Node Red
+router.get("/CheckOfflineDevice", async (req, res)=> {
+  try {
+    const pool = await poolPromise;
+    const result = await pool.request().query(`
+        SELECT deviceCode, LastCheckDevice, position FROM waterLimit
+        WHERE ISNULL(LastCheckDevice, '20210101') <= dateadd(minute,-25,getdate()) AND Status1 = '1'
+    `)
+    if(result.recordset.length > 0) {
+      console.log(result.recordset)
+      result.recordset.forEach(async(data, index)=> {
+        await lineNotify.notify({ message: `${ data.deviceCode } Offline `})
+        const pool2 = await poolPromise;
+        const result2 = await pool2.request().query(`
+          UPDATE waterLimit SET Status1 = '0'
+          WHERE deviceCode = '${ data.deviceCode }'
+    `)
+      })
+    }
+    res.json(constants.kResultOk );
+  } catch (error) {
+    res.json(constants.kResultNok);
+  }
+});
+
+
+
 // Get MonthDay
 router.get("/getMonthDay/:year/:month", async (req, res) => {
     const year = req.params.year;
@@ -222,9 +258,9 @@ router.get("/getwaterlogofday", async (req, res) => {
     const pool = await poolPromise;
     const result = await pool.request().query(`
     SELECT  deviceCode, exrate, rateLimit, position, (TotalMonth * exrate)AS TotalMonth, (TotalDay * exrate)AS TotalDay,
-    CONVERT(DATE,ISNULL((SELECT MAX(transDate) FROM waterLog WHERE deviceCode = waterCal.deviceCode), '20210101'))AS Lastcount ,
+    LastCheckDevice ,
       ('')AS ifShowmore, ('')AS ifRevised
-      FROM    (SELECT	WL.deviceCode,WL.exrate, WL.rateLimit, WL.position,
+      FROM    (SELECT	WL.deviceCode,WL.exrate, WL.rateLimit, WL.position, WL.LastCheckDevice,
           CASE	
       WHEN WL.deviceCode = 'WT-13' THEN	(SELECT WT05 - WT06 - WT07 FROM 
                           (SELECT COUNT(*)AS WT05, 
@@ -333,6 +369,58 @@ router.get("/getcolorweekend", async (req, res) => {
     res.json({ err_message: error.message });
   }
 });
+
+
+
+router.post("/dateFilter", async (req, res) => {
+  const { dateParse } = req.body;
+  console.log(dateParse)
+try {
+  const pool = await poolPromise;
+  const result = await pool.request().query(`
+              DECLARE @dateInput DATE = '${ dateParse }'
+              SELECT  deviceCode, exrate, rateLimit, position, (TotalMonth * exrate)AS TotalMonth, (TotalDay * exrate)AS TotalDay,
+                  CONVERT(DATE,ISNULL((SELECT MAX(transDate) FROM waterLog WHERE deviceCode = waterCal.deviceCode), '20210101'))AS Lastcount ,
+                  ('')AS ifShowmore, ('')AS ifRevised
+                FROM    (SELECT	WL.deviceCode,WL.exrate, WL.rateLimit, WL.position,
+                  CASE	
+                  WHEN WL.deviceCode = 'WT-13' THEN	(SELECT WT05 - WT06 - WT07 FROM 
+                                      (SELECT COUNT(*)AS WT05, 
+                                      (SELECT COUNT(*) FROM waterLog WHERE Month(transDate) = Month(@dateInput) AND deviceCode ='WT-06')AS WT06,
+                                      (SELECT COUNT(*) FROM waterLog WHERE Month(transDate) = Month(@dateInput) AND deviceCode ='WT-07')AS WT07
+                                    FROM waterLog WHERE Month(transDate) = Month(@dateInput) AND deviceCode ='WT-05')AS A)
+                  WHEN WL.deviceCode = 'WT-14' THEN 	(SELECT ((WT09 + WT10) - WT11) FROM 
+                                      (SELECT COUNT(*)AS WT11, 
+                                      (SELECT COUNT(*) FROM waterLog WHERE Month(transDate) = Month(@dateInput) AND deviceCode ='WT-09')AS WT09,
+                                      (SELECT COUNT(*) FROM waterLog WHERE Month(transDate) = Month(@dateInput) AND deviceCode ='WT-10')AS WT10
+                                    FROM waterLog WHERE Month(transDate) = Month(@dateInput) AND deviceCode ='WT-11')AS A)
+                  ELSE (SELECT COUNT(*) FROM waterLog WHERE Month(transDate) = Month(@dateInput) AND deviceCode = WL.deviceCode)
+                END AS TotalMonth,
+              CASE	
+                  WHEN WL.deviceCode = 'WT-13' THEN	(SELECT WT05 - WT06 - WT07 FROM 
+                                      (SELECT COUNT(*)AS WT05, 
+                                      (SELECT COUNT(*) FROM waterLog WHERE DATEPART(DAYOFYEAR,transDate) = DATEPART(DAYOFYEAR, @dateInput) AND deviceCode ='WT-06')AS WT06,
+                                      (SELECT COUNT(*) FROM waterLog WHERE DATEPART(DAYOFYEAR,transDate) = DATEPART(DAYOFYEAR, @dateInput) AND deviceCode ='WT-07')AS WT07
+                                    FROM waterLog WHERE DATEPART(DAYOFYEAR,transDate) = DATEPART(DAYOFYEAR, @dateInput) AND deviceCode ='WT-05')AS A)
+                  WHEN WL.deviceCode = 'WT-14' THEN 	(SELECT ((WT09 + WT10) - WT11) FROM 
+                                      (SELECT COUNT(*)AS WT11, 
+                                      (SELECT COUNT(*) FROM waterLog WHERE DATEPART(DAYOFYEAR,transDate) = DATEPART(DAYOFYEAR, @dateInput) AND deviceCode ='WT-09')AS WT09,
+                                      (SELECT COUNT(*) FROM waterLog WHERE DATEPART(DAYOFYEAR,transDate) = DATEPART(DAYOFYEAR, @dateInput) AND deviceCode ='WT-10')AS WT10
+                                    FROM waterLog WHERE DATEPART(DAYOFYEAR,transDate) = DATEPART(DAYOFYEAR, @dateInput) AND deviceCode ='WT-11')AS A)
+                  ELSE (SELECT COUNT(*) FROM waterLog WHERE DATEPART(DAYOFYEAR,transDate) = DATEPART(DAYOFYEAR, @dateInput) AND deviceCode = WL.deviceCode)
+                END AS TotalDay
+                  FROM	waterLimit WL)AS waterCal 
+                ORDER BY deviceCode 
+        `);
+  res.json({ result: result.recordset , message: constants.kResultOk });
+} catch (error) {
+  res.json({ err_message: error.message });
+}
+});
+
+
+
+
 
 
 
