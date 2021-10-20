@@ -10,4 +10,7 @@ router.use(require("./api_report"))
 router.use(require("./api_Mould"))
 router.use(require("./api_orderstatus"))
 router.use(require("./api_stone"))
+router.use(require("./api_PurchaseRequest"))
+
+
 module.exports = router;
