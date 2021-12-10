@@ -20,7 +20,7 @@ router.post("/login", async(req, res) => {
             (SELECT	EM.EmpCode, Password, EM.EmpFullName, ((1234 * 151))AS TokenSQL, ISNULL(EP.PolicyCode, '01')AS PolicyCode, EM.EmpPict, 
 					EM.ProductionTeam, ISNULL(EP.Appove, 0)AS Appove
             FROM	Employee EM LEFT JOIN MA.EmpPolicy EP ON EM.EmpCode = EP.EmpCode
-            WHERE	EM.EmpCode = '${ username }'
+            WHERE	EM.EmpCode = '${ username }' AND IsResign != '1'
             )AS		EM LEFT JOIN MA.PolicyName PN ON EM.PolicyCode = PN.PolicyCode
 
         `);

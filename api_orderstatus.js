@@ -80,6 +80,33 @@ router.get("/getorderstatus", async(req, res) => {
     }
 })
 
+router.get("/getordersGame", async(req, res) => {
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request().query(`
+                    SELECT OrderNumber, OrderDate,DueDate,                 
+            CASE
+                                WHEN Customer.Status = '1' THEN 'K.KLAR'
+                                WHEN Customer.Status = '2' THEN 'K.NOOT'
+                                WHEN Customer.Status = '3' THEN 'K.NAN'
+                                ELSE 'ไม่มีข้อมูล'
+                            END	SalesManager,
+                            CASE	
+                                WHEN ProductionTeam = '1' THEN 'FAC1'
+                                WHEN ProductionTeam = '2' THEN 'FAC2'
+                                WHEN ProductionTeam = '3' THEN 'FAC3'
+                                WHEN ProductionTeam = '4' THEN 'FAC4'
+                                ELSE 'ไม่ระบุ'
+                            END ProductionTeamName
+            FROM	OrderMaster OM JOIN Customer ON OM.CusCode = Customer.CusCode
+            WHERE	OM.Status = '2' AND LEFT(OM.OrderNumber,5) != 'CH-M-' AND LEFT(OM.OrderNumber,3) = 'CH-' AND YEAR(OrderDate) = 2021
+            `);
+        res.json(result.recordset)
+    } catch (error) {
+        res.json({ result: constants.kResultNok })
+    }
+})
+
 
 router.post("/getorderstatusbetween", async(req, res) => {
     const {start, to} = req.body
@@ -183,7 +210,7 @@ router.post("/getproductbyorder", async(req, res) => {
     try {
         const pool = await poolPromise;
         const result = await pool.request().query(`
-            SELECT 'http://172.16.0.5:3000/picture/'+REPLACE(SUBSTRING(PM.NewPict,4,200),'\','/') NewPict, PM.ProductID, PM.ProductCode, Qty
+            SELECT 'http://172.16.0.5:3000/picture/'+REPLACE(SUBSTRING(PM.NewPict,4,200),'\','/') NewPict, PM.ProductID, PM.ProductCode, Qty, PM.ProductDesc
             FROM	OrderDetail OD JOIN ProductMaster PM ON OD.ProductID = PM.ProductID
             WHERE   OrderNumber = '${ OrderNumber }'
             `);

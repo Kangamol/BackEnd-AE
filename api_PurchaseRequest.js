@@ -10,8 +10,8 @@ const poolPromise = require("./connect_mssql");
 //   try {
 //     const pool = await poolPromise;
 //     const result = await pool.request()
-//       .query(`                                                                   
-//       SELECT  INV_TYPE_ID, ITEM_ID, ITEM_NAME, UNIT_ID 
+//       .query(`
+//       SELECT  INV_TYPE_ID, ITEM_ID, ITEM_NAME, UNIT_ID
 //       FROM    ph.Inventory
 //       Order by INV_TYPE_ID
 //             `);
@@ -28,7 +28,7 @@ router.get("/getBillMasterByBillId/:bill_id", async (req, res) => {
     const pool = await poolPromise;
     const result = await pool.request()
       .query(`                                                                        
-            SELECT Purchase_Bill_ID, Purchase_Bill_Doc, Request_ID, Section_Code, Position_Code, Inspactor_ID, Approver_ID, Bill_Date, Status_Code, position_name
+            SELECT Purchase_Bill_ID, Purchase_Bill_Doc, Request_ID, Section_Code, Position_Code, Inspactor_ID, Approver_ID, Bill_Date, Status_Code, position_name, Phone_Number
             FROM ph.PurchaseBillMaster
             JOIN ph.Position ON Section_Code=section_code AND Position_Code=position_code
             WHERE Purchase_Bill_ID = '${bill_id}' 
@@ -74,19 +74,46 @@ router.get("/getItemType", async (req, res) => {
     res.json({ message: constants.kResultNok });
   }
 });
+
+
+router.get("/getItemsName", async (req, res) => {
+  try {
+    const pool = await poolPromise;
+    const result = await pool.request()
+      .query(`                                                                   
+          SELECT Purchase_Bill_ID , ITEM_NO ,
+          CASE 
+          WHEN ITEM_NAME = 'อื่นๆ' THEN Remark + ' (อื่นๆ)' 
+          ELSE ITEM_NAME 
+          END ITEM_NAME
+          FROM ph.PurchaseBillDetail JOIN ph.Inventory ON  ph.PurchaseBillDetail.ITEM_ID =  ph.Inventory.ITEM_ID
+          WHERE ITEM_NO <= 3
+          ORDER BY Purchase_Bill_ID
+            `);
+    res.json(result.recordset);
+    // res.json({ result: result.recordset, message: constants.kResultOk });
+  } catch (error) {
+    res.json({ message: constants.kResultNok });
+  }
+});
+
+
 //SELECT * FROM ph.PurchaseBillMaster
 router.get("/getPurchaseBillMaster", async (req, res) => {
   try {
     const pool = await poolPromise;
     const result = await pool.request()
       .query(`                                                                   
-            SELECT Purchase_Bill_ID, Purchase_Bill_Doc, Request_ID, EP.EmpFullName, Section_Code, SectionName, Inspactor_ID, Approver_ID, Bill_Date, Status_Code
-            FROM ph.PurchaseBillMaster
-            INNER JOIN dbo.Section ON ph.PurchaseBillMaster.Section_Code=dbo.Section.SectionCode
-            INNER JOIN ph.Status ON ph.PurchaseBillMaster.Status_Code=ph.Status.status_code
-            INNER JOIN Employee EP ON Request_ID=EmpCode
-            ORDER BY Status_Code , Bill_Date
-       
+      SELECT Purchase_Bill_ID, Purchase_Bill_Doc, Request_ID, (EP.EmpFullName) AS Request_FullName, (EP.NickName) AS Request_NickName, Section_Code, SectionName, Position_Code, position_name, Inspactor_ID, Approver_ID, Bill_Date, Status_Code,
+      (Emp.EmpFullName) AS Inspactor_FullName, (Emp.NickName) AS Inspactor_NickName , Phone_Number  , 'http://172.16.0.5:3000/picture/'+REPLACE(SUBSTRING(EP.EmpPict ,4,200),'\','/') AS Request_EmpPict ,
+      IIF(Emp.EmpPict IS NULL OR Emp.EmpPict = '', 'http://172.16.0.5:3000/picture/PICTURE2/Employee/avatarShow.png', 'http://172.16.0.5:3000/picture/'+REPLACE(SUBSTRING(Emp.EmpPict ,4,200),'\','/')) AS Inspactor_EmpPict
+      FROM ph.PurchaseBillMaster
+      JOIN ph.Position ON Section_Code=section_code AND Position_Code=position_code
+      INNER JOIN dbo.Section ON ph.PurchaseBillMaster.Section_Code=dbo.Section.SectionCode
+      INNER JOIN ph.Status ON ph.PurchaseBillMaster.Status_Code=ph.Status.status_code
+      INNER JOIN Employee EP ON Request_ID=EmpCode
+      LEFT JOIN Employee Emp ON Inspactor_ID=Emp.EmpCode
+      ORDER BY Status_Code , Bill_Date
             `);
     res.json(result.recordset);
     // res.json({ result: result.recordset, message: constants.kResultOk });
@@ -114,7 +141,7 @@ router.get("/getSection", async (req, res) => {
     const pool = await poolPromise;
     const result = await pool.request()
       .query(`                                                                   
-        SELECT * FROM dbo.Section WHERE SectionCode BETWEEN 4 AND 20;
+        SELECT * FROM dbo.Section WHERE SectionCode BETWEEN 4 AND 22;
             `);
     res.json(result.recordset);
     // res.json({ result: result.recordset, message: constants.kResultOk });
@@ -158,13 +185,17 @@ router.get("/getBillOrder/:bill_id", async (req, res) => {
   }
 });
 
-router.get("/getItemStatus1and2", async (req, res) => {
+router.get("/getItemStatus/:itemStatus1/:itemStatus2", async (req, res) => {
   try {
+    const { itemStatus1, itemStatus2 } = req.params;
+    //console.log("itemStatus1 : " , itemStatus1)
+    //console.log("itemStatus2 : " , itemStatus2)
     const pool = await poolPromise;
     const result = await pool.request()
       .query(`                                                                   
             SELECT * FROM ph.Inventory
-            WHERE INV_TYPE_ID IN ('1' , '2')
+            WHERE INV_TYPE_ID IN (CAST('${itemStatus1}' AS INT), CAST('${itemStatus2}' AS INT), 0)
+            ORDER by INV_TYPE_ID
             `);
     res.json(result.recordset);
     // res.json({ result: result.recordset, message: constants.kResultOk });
@@ -173,58 +204,26 @@ router.get("/getItemStatus1and2", async (req, res) => {
   }
 });
 
-////////////////////////////////Filter////////////////////////////////////////////
-router.get("/getItemStatus1", async (req, res) => {
-  try {
-    const pool = await poolPromise;
-    const result = await pool.request()
-      .query(`                                                                   
-            SELECT * FROM ph.Inventory
-            WHERE INV_TYPE_ID = '1'
-            `);
-    res.json(result.recordset);
-    // res.json({ result: result.recordset, message: constants.kResultOk });
-  } catch (error) {
-    res.json({ message: constants.kResultNok });
-  }
-});
-
-router.get("/getItemStatus2", async (req, res) => {
-  try {
-    const pool = await poolPromise;
-    const result = await pool.request()
-      .query(`                                                                   
-            SELECT * FROM ph.Inventory
-            WHERE INV_TYPE_ID = 2
-            `);
-    res.json(result.recordset);
-    // res.json({ result: result.recordset, message: constants.kResultOk });
-  } catch (error) {
-    res.json({ message: constants.kResultNok });
-  }
-});
-
-///////////////////////////////////////////////////////////////////////////////////
 router.post("/createPurchaseBill", async (req, res) => {
   let dataMaster = null;
-  const { Request_ID, Section_Code, Position_Code, DataDetail } = req.body;
+  const { Request_ID, Section_Code, Position_Code, Phone_Number, DataDetail } =
+    req.body;
   // console.log("req.body : " , req.body)
   // console.log("Request_ID : " , Request_ID)
   // console.log("Section_Code : " , Section_Code)
   //console.log("Position_Code : " , Position_Code)
   //console.log("DataDetail : " , DataDetail)
+  //console.log("Phone_Number : " , Phone_Number)
 
-
-  if (Request_ID !== null && Request_ID !== undefined ) {
+  if (Request_ID !== null && Request_ID !== undefined) {
     try {
-      
       const pool = await poolPromise;
       const result = await pool.request().query(`
-                INSERT INTO ph.PurchaseBillMaster (Purchase_Bill_Doc, Request_ID, Section_Code, Position_Code, Bill_Date, Status_Code)
+                INSERT INTO ph.PurchaseBillMaster (Purchase_Bill_Doc, Request_ID, Section_Code, Position_Code, Bill_Date, Status_Code, Phone_Number)
                 OUTPUT Inserted.Purchase_Bill_ID
                 VALUES ((SELECT RIGHT(YEAR(GETDATE()) + 543, 2) + FORMAT(GETDATE(), 'MM') + ISNULL(RIGHT('000' + CAST(CAST(MAX(RIGHT(PH.Purchase_Bill_Doc, 3)) + 1 AS INT)AS VARCHAR) , 3), '001')
                 FROM ph.PurchaseBillMaster AS PH
-                WHERE LEFT(PH.Purchase_Bill_Doc , 4) = (RIGHT(YEAR(GETDATE()) + 543, 2 ) + FORMAT(GETDATE() , 'MM'))), '${Request_ID}', '${Section_Code}', '${Position_Code}', GETUTCDATE(), '0')
+                WHERE LEFT(PH.Purchase_Bill_Doc , 4) = (RIGHT(YEAR(GETDATE()) + 543, 2 ) + FORMAT(GETDATE() , 'MM'))), '${Request_ID}', '${Section_Code}', '${Position_Code}', GETUTCDATE(), '0', '${Phone_Number}')
                   `);
       // console.log("Inserted.Purchase_Bill_ID : " , Inserted.Purchase_Bill_ID)
       // console.log(result.recordset[0])
@@ -247,13 +246,16 @@ router.post("/createPurchaseBill", async (req, res) => {
             if (data.remark == null) {
               data.remark = "";
             }
-            
 
             const pool = await poolPromise;
             const result = await pool.request()
               .query(`                                                                   
                         INSERT INTO ph.PurchaseBillDetail (Purchase_Bill_ID, ITEM_NO, ITEM_ID, ITEM_Qty, ITEM_UNIT_ID, PIC_ID, Remark)
-                        VALUES ( '${DataMaster}' , '${index + 1}',  '${data.ITEM_ID}', '${data.Qty}' ,'${data.UNIT_ID}', ${data.ITEM_PICT}, '${data.remark}'
+                        VALUES ( '${DataMaster}' , '${index + 1}',  '${
+              data.ITEM_ID
+            }', '${data.Qty}' ,'${data.UNIT_ID}', ${data.ITEM_PICT}, '${
+              data.remark
+            }'
                         )`);
           } catch (error) {
             res.json({ result: constants.kResultNok });
@@ -332,52 +334,49 @@ router.post("/updateInspactor/:Emp_Code/:Bill_ID", async (req, res) => {
   }
 });
 
-
 router.post("/updateBill_Detail/:Bill_ID", async (req, res) => {
   const { Bill_ID } = req.params;
-  const  dataList  = req.body
-  
-  // console.log("datalist : ", dataList);
- 
-  //   console.log("--------------------")
-    try {
-      dataList.forEach(async (data, index) => {
-        if (dataList[index].Remark == null || dataList[index].Remark == undefined) {
-          dataList[index].Remark = "";
-        }
-        if(dataList[index].Price == undefined) {
-          dataList[index].Price = null
-        }
-        //ปวดหัวอยู่ 2 วัน
-        if(dataList[index].ITEM_UNIT_ID == undefined) {
-          dataList[index].ITEM_UNIT_ID = dataList[index].UNIT_ID
-        }
-        if(dataList[index].UNIT_ID == undefined) {
-          dataList[index].UNIT_ID = dataList[index].ITEM_UNIT_ID
-        }
-        
+  const dataList = req.body;
 
-        // console.log("--------------------")
-        // console.log("Bill_ID : " , Bill_ID)
-        // console.log("ITEM_NO : " , index + 1)
-        // console.log("ITEM_ID : " , dataList[index].ITEM_ID)
-        // console.log("ITEM_Qty : ", dataList[index].ITEM_Qty)
-        // console.log("ITEM_UNIT_ID : ", dataList[index].ITEM_UNIT_ID)
-        // console.log("Price : " , dataList[index].Price)
-        // console.log("PRICE : " , dataList[index].PRICE)
-        // console.log("PIC_ID : ", dataList[index].PIC_ID)
-        // console.log("--------------------")
-    
+  //console.log("datalist : ", dataList);
+
+  //   console.log("--------------------")
+  try {
+    dataList.forEach(async (data, index) => {
+      if (
+        dataList[index].Remark == null ||
+        dataList[index].Remark == undefined
+      ) {
+        dataList[index].Remark = "";
+      }
+      if (dataList[index].Price == undefined) {
+        dataList[index].Price = null;
+      }
+      if (dataList[index].PRICE == undefined) {
+        dataList[index].PRICE = null;
+      }
+      //ปวดหัวอยู่ 2 วัน
+      if (dataList[index].ITEM_UNIT_ID == undefined) {
+        dataList[index].ITEM_UNIT_ID = dataList[index].UNIT_ID;
+      }
+      if (dataList[index].UNIT_ID == undefined) {
+        dataList[index].UNIT_ID = dataList[index].ITEM_UNIT_ID;
+      }
+
       const pool = await poolPromise;
       const result = await pool.request().query(`
                 INSERT INTO ph.PurchaseBillDetail (Purchase_Bill_ID, ITEM_NO, ITEM_ID, ITEM_Qty, ITEM_UNIT_ID, PRICE, PIC_ID, Remark)
-                VALUES ( ${Bill_ID} , ${index + 1}, '${dataList[index].ITEM_ID}' , ${dataList[index].ITEM_Qty} , ${dataList[index].ITEM_UNIT_ID} , ${dataList[index].PRICE} , null , '${dataList[index].Remark}')
+                VALUES ( ${Bill_ID} , ${index + 1}, '${
+        dataList[index].ITEM_ID
+      }' , ${dataList[index].ITEM_Qty} , ${dataList[index].ITEM_UNIT_ID} , ${
+        dataList[index].PRICE
+      } , null , '${dataList[index].Remark}')
               `);
-      })
-      res.json({ result: constants.kResultOk });
-    } catch (error) {
-      res.json({ result: constants.kResultNok });
-    } 
+    });
+    res.json({ result: constants.kResultOk });
+  } catch (error) {
+    res.json({ result: constants.kResultNok });
+  }
 });
 
 //DELETE FROM ph.PurchaseBillDetail WHERE Purchase_Bill_ID = '17' AND ITEM_NO = '2'
@@ -430,7 +429,6 @@ router.delete("/deleteBillDetail/:Bill_ID", async (req, res) => {
   try {
     const { Bill_ID } = req.params;
     // console.log("Bill_ID หน้า BackEnd : ", Bill_ID);
-    
 
     const pool = await poolPromise;
     const result = await pool.request().query(`
@@ -442,7 +440,6 @@ router.delete("/deleteBillDetail/:Bill_ID", async (req, res) => {
     res.json({ result: "ERROR /deleteBillDetail" });
   }
 });
-
 
 /////////////////////////////////// Employee ////////////////////////////////////////////////
 router.get("/getEmployee/:request_id", async (req, res) => {

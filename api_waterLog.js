@@ -192,30 +192,24 @@ router.get("/getMonthDay/:year/:month", async (req, res) => {
         WITH numbers
         as  
         (
-            Select 1 as value
-            UNion ALL
-            Select value + 1 from numbers
-            where value + 1 <= Day(EOMONTH(datefromparts(@year,@month,1)))
-        )
-        SELECT dayNum, v01, v02, v03, v04, v05, v06, v07, v08, v09, v10, v11, v12,
-                IIF(( v05 - v07 - v06 ) < 0, 0 , ( v05 - v07 - v06 ))AS v13,
-                IIF(((v09 + v10) - v11) < 0, 0, ((v09 + v10) - v11))AS v14
-        FROM 
-        (
-        SELECT day(datefromparts(@year,@month,numbers.value)) dayNum, 
-        (SELECT (exrate * (SELECT COUNT(*) FROM waterLog WHERE waterLimit.deviceCode = waterLog.deviceCode AND year(transDate)=@year and month(transDate)=@month and day(transDate)=day(datefromparts(@year,@month,numbers.value)))) FROM waterLimit WHERE deviceCode = 'WT-01')AS v01,
-        (SELECT (exrate * (SELECT COUNT(*) FROM waterLog WHERE waterLimit.deviceCode = waterLog.deviceCode AND year(transDate)=@year and month(transDate)=@month and day(transDate)=day(datefromparts(@year,@month,numbers.value)))) FROM waterLimit WHERE deviceCode = 'WT-02')AS v02,
-        (SELECT (exrate * (SELECT COUNT(*) FROM waterLog WHERE waterLimit.deviceCode = waterLog.deviceCode AND year(transDate)=@year and month(transDate)=@month and day(transDate)=day(datefromparts(@year,@month,numbers.value)))) FROM waterLimit WHERE deviceCode = 'WT-03')AS v03,
-        (SELECT (exrate * (SELECT COUNT(*) FROM waterLog WHERE waterLimit.deviceCode = waterLog.deviceCode AND year(transDate)=@year and month(transDate)=@month and day(transDate)=day(datefromparts(@year,@month,numbers.value)))) FROM waterLimit WHERE deviceCode = 'WT-04')AS v04,
-        (SELECT (exrate * (SELECT COUNT(*) FROM waterLog WHERE waterLimit.deviceCode = waterLog.deviceCode AND year(transDate)=@year and month(transDate)=@month and day(transDate)=day(datefromparts(@year,@month,numbers.value)))) FROM waterLimit WHERE deviceCode = 'WT-05')AS v05,
-        (SELECT (exrate * (SELECT COUNT(*) FROM waterLog WHERE waterLimit.deviceCode = waterLog.deviceCode AND year(transDate)=@year and month(transDate)=@month and day(transDate)=day(datefromparts(@year,@month,numbers.value)))) FROM waterLimit WHERE deviceCode = 'WT-06')AS v06,
-        (SELECT (exrate * (SELECT COUNT(*) FROM waterLog WHERE waterLimit.deviceCode = waterLog.deviceCode AND year(transDate)=@year and month(transDate)=@month and day(transDate)=day(datefromparts(@year,@month,numbers.value)))) FROM waterLimit WHERE deviceCode = 'WT-07')AS v07,
-        (SELECT (exrate * (SELECT COUNT(*) FROM waterLog WHERE waterLimit.deviceCode = waterLog.deviceCode AND year(transDate)=@year and month(transDate)=@month and day(transDate)=day(datefromparts(@year,@month,numbers.value)))) FROM waterLimit WHERE deviceCode = 'WT-08')AS v08,
-        (SELECT (exrate * (SELECT COUNT(*) FROM waterLog WHERE waterLimit.deviceCode = waterLog.deviceCode AND year(transDate)=@year and month(transDate)=@month and day(transDate)=day(datefromparts(@year,@month,numbers.value)))) FROM waterLimit WHERE deviceCode = 'WT-09')AS v09,
-        (SELECT (exrate * (SELECT COUNT(*) FROM waterLog WHERE waterLimit.deviceCode = waterLog.deviceCode AND year(transDate)=@year and month(transDate)=@month and day(transDate)=day(datefromparts(@year,@month,numbers.value)))) FROM waterLimit WHERE deviceCode = 'WT-10')AS v10,
-        (SELECT (exrate * (SELECT COUNT(*) FROM waterLog WHERE waterLimit.deviceCode = waterLog.deviceCode AND year(transDate)=@year and month(transDate)=@month and day(transDate)=day(datefromparts(@year,@month,numbers.value)))) FROM waterLimit WHERE deviceCode = 'WT-11')AS v11,
-        (SELECT (exrate * (SELECT COUNT(*) FROM waterLog WHERE waterLimit.deviceCode = waterLog.deviceCode AND year(transDate)=@year and month(transDate)=@month and day(transDate)=day(datefromparts(@year,@month,numbers.value)))) FROM waterLimit WHERE deviceCode = 'WT-12')AS v12
-        FROM numbers)AS water
+          Select 1 as value
+          UNion ALL
+          Select value + 1 from numbers
+          where value + 1 <= Day(EOMONTH(datefromparts(@year,@month,1)))
+        ) SELECT	(value)AS dayNum, ISNULL([WT-01], 0) AS v01, ISNULL([WT-02], 0) AS v02, ISNULL([WT-03], 0) AS v03, ISNULL([WT-04], 0) AS v04, 
+              ISNULL([WT-05], 0) AS v05, ISNULL([WT-06], 0) AS v06, ISNULL([WT-07], 0) AS v07, ISNULL([WT-08], 0) AS v08, ISNULL([WT-09], 0) AS v09, 
+              ISNULL([WT-10], 0) AS v10, ISNULL([WT-11], 0) AS v11, ISNULL([WT-12], 0) AS v12,                 
+              IIF(( ISNULL([WT-05],0) - ISNULL([WT-07],0) - ISNULL([WT-06],0) ) < 0, 0 , ( ISNULL([WT-05],0) - ISNULL([WT-07],0) - ISNULL([WT-06],0) ))AS v13,
+                      IIF(((ISNULL([WT-09],0) + ISNULL([WT-10],0)) - ISNULL([WT-11],0)) < 0, 0, ((ISNULL([WT-09],0) + ISNULL([WT-10],0)) - ISNULL([WT-11],0)))AS v14
+        FROM numbers LEFT JOIN
+        (SELECT * 
+        FROM (SELECT waterLog.deviceCode, DAY(transDate)AS DateDay, (COUNT(*) * waterLimit.exrate)AS Total 
+          FROM waterLog JOIN waterLimit ON waterLog.deviceCode = waterLimit.deviceCode
+          WHERE YEAR(transDate) = @year AND MONTH(transDate) = @month
+          GROUP BY waterLog.deviceCode, DAY(transDate), waterLimit.exrate)
+        AS A PIVOT (SUM(Total) FOR deviceCode IN ([WT-01],[WT-02],[WT-03],[WT-04],[WT-05],[WT-06],[WT-07],[WT-08],[WT-09],[WT-10],[WT-11],[WT-12]))AS B)AS DataValues 
+        ON numbers.value = DataValues.DateDay
+        ORDER BY dayNum
             `);
       res.json(result.recordset);
       await pool.close;
@@ -257,7 +251,9 @@ router.get("/getwaterlogofday", async (req, res) => {
   try {
     const pool = await poolPromise;
     const result = await pool.request().query(`
-    SELECT  deviceCode, exrate, rateLimit, position, (TotalMonth * exrate)AS TotalMonth, (TotalDay * exrate)AS TotalDay,
+    SELECT  deviceCode, exrate, rateLimit, position, 
+            IIF(TotalMonth < 0 , 0,(TotalMonth * exrate))AS TotalMonth,
+            IIF(TotalDay < 0, 0,(TotalDay * exrate))AS TotalDay,
     LastCheckDevice ,
       ('')AS ifShowmore, ('')AS ifRevised
       FROM    (SELECT	WL.deviceCode,WL.exrate, WL.rateLimit, WL.position, WL.LastCheckDevice,
@@ -379,7 +375,9 @@ try {
   const pool = await poolPromise;
   const result = await pool.request().query(`
               DECLARE @dateInput DATE = '${ dateParse }'
-              SELECT  deviceCode, exrate, rateLimit, position, (TotalMonth * exrate)AS TotalMonth, (TotalDay * exrate)AS TotalDay,
+              SELECT  deviceCode, exrate, rateLimit, position, 
+                  IIF(TotalMonth < 0 , 0,(TotalMonth * exrate))AS TotalMonth,
+                  IIF(TotalDay < 0, 0,(TotalDay * exrate))AS TotalDay,
                   CONVERT(DATE,ISNULL((SELECT MAX(transDate) FROM waterLog WHERE deviceCode = waterCal.deviceCode), '20210101'))AS Lastcount ,
                   ('')AS ifShowmore, ('')AS ifRevised
                 FROM    (SELECT	WL.deviceCode,WL.exrate, WL.rateLimit, WL.position,

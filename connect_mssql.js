@@ -1,10 +1,11 @@
 const sql = require("mssql");
 
 const dbconfig = {
-    user: process.env.USERNAME_DB,
-    password: process.env.PASSWORD_DB,
+    user: 'sa',
+    password: 'sqlpassword',
+    // server: '172.16.0.2\\MSSQL2012',
     server: '172.16.0.2\\MSSQL2012',
-    database: process.env.DB_NAME,
+    database: 'AEDAT',
     options: {
         encrypt: false,
         enableArithAbort: false,
