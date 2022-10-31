@@ -5,7 +5,8 @@ const poolPromise = require("./connect_mssql");
 
 module.exports = router;
 
-router.get("/getorderstatus", async(req, res) => {
+router.post("/getorderstatus", async (req, res) => {
+    const { maxDate, minDate } = req.body;
     try {
         const pool = await poolPromise;
         const result = await pool.request().query(`
@@ -70,7 +71,7 @@ router.get("/getorderstatus", async(req, res) => {
         GROUP BY SUMTABLE.OrderNumber
         )AS		STB JOIN OrderMaster OM ON STB.OrderNumber = OM.OrderNumber
                 JOIN Customer ON OM.CusCode = Customer.CusCode
-        WHERE	OM.Status = '2' AND LEFT(OM.OrderNumber,5) != 'CH-M-' AND LEFT(OM.OrderNumber,3) = 'CH-' AND YEAR(OrderDate) = 2021
+        WHERE	OM.Status = '2' AND LEFT(OM.OrderNumber,5) != 'CH-M-' AND LEFT(OM.OrderNumber,3) = 'CH-' AND DueDate BETWEEN '${minDate}' AND '${maxDate}'
         )AS AA
         ORDER BY DueDate      
             `);
@@ -80,7 +81,7 @@ router.get("/getorderstatus", async(req, res) => {
     }
 })
 
-router.get("/getordersGame", async(req, res) => {
+router.get("/getordersGame", async (req, res) => {
     try {
         const pool = await poolPromise;
         const result = await pool.request().query(`
@@ -107,9 +108,9 @@ router.get("/getordersGame", async(req, res) => {
     }
 })
 
-
-router.post("/getorderstatusbetween", async(req, res) => {
-    const {start, to} = req.body
+//ไม่ได้ใช้กับ Page ใหม่แล้ว
+router.post("/getorderstatusbetween", async (req, res) => {
+    const { start, to } = req.body
     console.log(start, to)
     try {
         const pool = await poolPromise;
@@ -187,15 +188,17 @@ router.post("/getorderstatusbetween", async(req, res) => {
 })
 
 
-router.post("/getstonebyorder", async(req, res) => {
+router.post("/getstonebyorder", async (req, res) => {
     const { OrderNumber } = req.body
     // console.log(start, to)
     try {
         const pool = await poolPromise;
         const result = await pool.request().query(`
-                SELECT InvCode, QtyReq
-                FROM MaterialPlan
-                WHERE OrderNumber = '${ OrderNumber }'
+
+        SELECT InvCode, SUM(QtyReq) AS QtyReq
+        FROM PurchaseStatus
+        WHERE OrderNumber = '${OrderNumber}'
+        GROUP BY InvCode
             `);
         res.json(result.recordset)
     } catch (error) {
@@ -204,15 +207,15 @@ router.post("/getstonebyorder", async(req, res) => {
 })
 
 
-router.post("/getproductbyorder", async(req, res) => {
+router.post("/getproductbyorder", async (req, res) => {
     const { OrderNumber } = req.body
     // console.log(start, to)
     try {
         const pool = await poolPromise;
         const result = await pool.request().query(`
-            SELECT 'http://172.16.0.5:3000/picture/'+REPLACE(SUBSTRING(PM.NewPict,4,200),'\','/') NewPict, PM.ProductID, PM.ProductCode, Qty, PM.ProductDesc
+            SELECT 'http://192.168.3.5:3000/picture/'+REPLACE(SUBSTRING(PM.NewPict,4,200),'\','/') NewPict, PM.ProductID, PM.ProductCode, Qty, PM.ProductDesc, ItemNo
             FROM	OrderDetail OD JOIN ProductMaster PM ON OD.ProductID = PM.ProductID
-            WHERE   OrderNumber = '${ OrderNumber }'
+            WHERE   OrderNumber = '${OrderNumber}'
             `);
         res.json(result.recordset)
     } catch (error) {
@@ -221,7 +224,7 @@ router.post("/getproductbyorder", async(req, res) => {
 })
 
 
-router.post("/getstoneproduct", async(req, res) => {
+router.post("/getstoneproduct", async (req, res) => {
     const { OrderNumber } = req.body
     try {
         const pool = await poolPromise;
@@ -235,7 +238,7 @@ router.post("/getstoneproduct", async(req, res) => {
         FROM	OrderDetail OD JOIN ProductMaster PM ON OD.ProductID = PM.ProductID
                 LEFT JOIN ProductDetail PD ON PM.ProductID = PD.ProductID
                 LEFT JOIN InvMaster ON PD.InvCode = InvMaster.InvCode
-        WHERE	OrderNumber = '${ OrderNumber }' AND InvMaster.InvGroupCode IN('02','03','04','05','06')
+        WHERE	OrderNumber = '${OrderNumber}' AND InvMaster.InvGroupCode IN('02','03','04','05','06')
             `);
         res.json(result.recordset)
     } catch (error) {
@@ -243,7 +246,7 @@ router.post("/getstoneproduct", async(req, res) => {
     }
 })
 
-router.post("/getorderdetailstatus", async(req, res) => {
+router.post("/getorderdetailstatus", async (req, res) => {
     const { OrderNumber } = req.body
     try {
         const pool = await poolPromise;
@@ -257,12 +260,12 @@ router.post("/getorderdetailstatus", async(req, res) => {
         ISNULL([21], 0)AS [P21], ISNULL([22], 0)AS [P22]
 FROM (
         Select	OrderNumber ,JO.JobNumber, JO.ProductID, OrderItemNo, JobQty, JO.ProductCode, PDProcessCode, (JS.In_Q + JS.Out_Q + JS.Receive_Q + JS.Send_Q) TotalDP,
-                'http://172.16.0.5:3000/picture/'+REPLACE(SUBSTRING(NewPict,4,200),'\','/') NewPict,
+                'http://192.168.3.5:3000/picture/'+REPLACE(SUBSTRING(NewPict,4,200),'\','/') NewPict,
                 ISNULL(( SELECT SUM(qBD.Qty) FROM qaBillDetail qBD
                 WHERE qBD.OrderNumber = JO.OrderNumber AND qBD.OrderItemNo = JO.OrderItemNo), 0)AS TotalQA
         FROM	JobOrder JO LEFT join JobStatus JS ON JO.JobNumber = JS.JobNumber
                 LEFT JOIN ProductMaster PM ON JO.ProductID = PM.ProductID 
-        WHERE	OrderNumber = '${ OrderNumber }'
+        WHERE	OrderNumber = '${OrderNumber}'
         )AS PIVOTTABLE PIVOT ( SUM(TotalDP) FOR PDProcessCode IN ([01],[02],[03],[04],[05],[06],[07],[08],[09],[10],[11],[12],[13],[14],[15],[16],[17],[18],[19],[20],[21],[22]) ) AS PIVOTTEST
             `);
         res.json(result.recordset)
@@ -272,7 +275,7 @@ FROM (
 })
 
 
-router.get("/reportworkerweightgold", async(req, res) => {
+router.get("/reportworkerweightgold", async (req, res) => {
     try {
         const pool = await poolPromise;
         const result = await pool.request().query(`
@@ -296,9 +299,201 @@ router.get("/reportworkerweightgold", async(req, res) => {
     } catch (error) {
         res.json({ result: error })
     }
-})
+});
 
 
+
+router.post("/getdataLineChartQA", async (req, res) => {
+    const { pdTeam } = req.body;
+    let valuesQuery;
+    if (pdTeam === '0') {
+        valuesQuery = `'1', '2', '3', '4'`;
+    } else {
+        valuesQuery = `'${pdTeam}'`;
+    }
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request().query(`
+        DECLARE @minDate DATE = CONVERT(DATE,(GETDATE()- 9));
+        DECLARE @maxDate DATE = CONVERT(DATE,(GETDATE()));
+        SELECT	CAST(CONVERT(DATE,QM.billDate)AS VARCHAR)AS GroupDay, SUM(QD.Qty)AS TotalQty
+        FROM	qaBillMaster QM JOIN qaBillDetail QD ON QM.qaBill_ID = QD.qaBill_ID
+                JOIN OrderMaster ON QM.OrderNumber = OrderMaster.OrderNumber
+        WHERE	QM.billDate BETWEEN  @minDate AND @maxDate AND OrderMaster.ProductionTeam IN (${valuesQuery}) 
+        GROUP	BY CONVERT(DATE,QM.billDate)        
+        `)
+        const GroupDay = result.recordset.map((obj) => obj.GroupDay)
+        const TotalQty = result.recordset.map((obj) => obj.TotalQty)
+        res.json({ GroupDay: GroupDay, TotalQty: TotalQty });
+    } catch (error) {
+        res.json({ result: error });
+    }
+});
+
+//งานหล่อ
+router.post("/castingRepairReportByItem", async (req, res) => {
+    const { orderNumber } = req.body;
+    // console.log(orderNumber);
+    // let Orders;
+    // if ( orderNumber.trim() === '' || orderNumber === undefined || orderNumber === null ) {
+    //     console.log('Hi !')
+    //     Orders = '';
+    // } else {
+    //     Orders = `AND JO.OrderNumber = '${ orderNumber }'`;
+    // }
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request().query(`
+        SELECT	JO.OrderNumber, JO.JobNumber ,OrderItemNo, JO.ProductID, JO.ProductCode, JobQty, 'http://192.168.3.5:3000/picture/'+REPLACE(SUBSTRING(PM.NewPict,4,200),'\','/') NewPict, 
+		        (SELECT ISNULL(SUM(SendQty), 0) FROM CastRepairBillMaster CM JOIN CastRepairBillDetail CD ON CM.Bill_ID = CD.Bill_ID
+		        WHERE OrderNumber = JO.OrderNumber AND JobNumber = JO.JobNumber)AS TotalRepairCasting,
+                (SELECT ISNULL(SUM(ReturnQty), 0) FROM CastRepairBillMaster CM JOIN CastRepairBillDetail CD ON CM.Bill_ID = CD.Bill_ID
+		        WHERE OrderNumber = JO.OrderNumber AND JobNumber = JO.JobNumber)AS TotalReturnRepairCasting,
+                (SELECT ISNULL(SUM(Qty), 0) FROM CastingOutput
+                WHERE OrderNumber = JO.OrderNumber AND OutputType IN ('1', '2', '3', '5') AND JobNumber = JO.JobNumber)AS TotalCastingNormal,
+                (SELECT ISNULL(SUM(Qty), 0) FROM CastingOutput
+                WHERE OrderNumber = JO.OrderNumber AND OutputType IN ('4', '6', '7') AND JobNumber = JO.JobNumber)AS TotalCastingSample
+        FROM	JobOrder JO JOIN OrderMaster ON JO.OrderNumber = OrderMaster.OrderNumber JOIN ProductMaster PM ON JO.ProductID = PM.ProductID
+        WHERE	OrderMaster.OrderNumber = '${orderNumber}'
+        `)
+        res.json(result.recordset);
+    } catch (error) {
+        res.json({ result: error });
+    }
+});
+
+router.post("/castingRepairReportByOrder", async (req, res) => {
+    const { minDate, maxDate } = req.body;
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request().query(`
+        SELECT	*, 
+        CASE	
+            WHEN TotalBillRepairCasting = 0 AND TotalReturnRepairCasting = 0 THEN 'ไม่มีหล่อซ่อม'
+            WHEN TotalBillRepairCasting > 0 AND TotalReturnRepairCasting < TotalBillRepairCasting THEN 'ยังรับกลับไม่ครบ'
+            WHEN TotalBillRepairCasting > 0 AND TotalReturnRepairCasting >= TotalBillRepairCasting THEN 'รับกลับครบแล้ว'
+            ELSE ''
+        END AS Status,
+        CASE DATEPART(WEEKDAY, OrderDate)
+            WHEN 1 THEN 'อา'
+            WHEN 2 THEN 'จ'
+            WHEN 3 THEN 'อ'
+            WHEN 4 THEN 'พ'
+            WHEN 5 THEN 'พฤ'
+            WHEN 6 THEN 'ศ'
+            WHEN 7 THEN 'ส'
+            ELSE 'ไม่มีข้อมูล'
+        END thaiDate
+        FROM 
+        (SELECT	OrderNumber, OrderDate,SUM(JobQty)AS JobQty, SUM(TotalBillRepairCasting)AS TotalBillRepairCasting, 
+                SUM(TotalCastingNormal)AS TotalCastingNormal, SUM(TotalCastingSample)AS TotalCastingSample, 
+                SUM(TotalReturnRepairCasting)AS TotalReturnRepairCasting, ProductionTeam
+        FROM (
+            SELECT	JO.OrderNumber, JO.JobQty, OrderDate, ProductionTeam ,
+            (SELECT ISNULL(SUM(SendQty), 0) FROM CastRepairBillMaster CM JOIN CastRepairBillDetail CD ON CM.Bill_ID = CD.Bill_ID
+            WHERE OrderNumber = JO.OrderNumber AND JobNumber = JO.JobNumber)AS TotalBillRepairCasting,
+            (SELECT ISNULL(SUM(ReturnQty), 0) FROM CastRepairBillMaster CM JOIN CastRepairBillDetail CD ON CM.Bill_ID = CD.Bill_ID
+            WHERE OrderNumber = JO.OrderNumber AND JobNumber = JO.JobNumber)AS TotalReturnRepairCasting,
+            (SELECT ISNULL(SUM(Qty), 0) FROM CastingOutput
+            WHERE OrderNumber = JO.OrderNumber AND OutputType IN ('1', '2', '3', '5') AND JobNumber = JO.JobNumber)AS TotalCastingNormal,
+            (SELECT ISNULL(SUM(Qty), 0) FROM CastingOutput
+            WHERE OrderNumber = JO.OrderNumber AND OutputType IN ('4', '6', '7') AND JobNumber = JO.JobNumber)AS TotalCastingSample
+            FROM	JobOrder JO JOIN OrderMaster ON JO.OrderNumber = OrderMaster.OrderNumber
+        WHERE	OrderMaster.Status = '2' AND OrderMaster.OrderDate BETWEEN '${minDate}' AND '${maxDate}')AS A
+        GROUP BY OrderNumber, ProductionTeam, OrderDate)AS B
+        `)
+        res.json(result.recordset);
+    } catch (error) {
+        res.json({ result: error });
+    }
+});
+
+
+router.post("/getStoneForOrder_New", async (req, res) => {
+    const { orderNumber } = req.body;
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request().query(`
+        SELECT InvCode, QtyReq, QtyPurchase, QtyPcReceive, QtyToFact, QtyFactBalance, SupDueDate, SupplierName,
+			  CASE DATEPART(WEEKDAY,SupDueDate)
+                    WHEN 1 THEN 'อา'
+                    WHEN 2 THEN 'จ'
+                    WHEN 3 THEN 'อ'
+                    WHEN 4 THEN 'พ'
+                    WHEN 5 THEN 'พฤ'
+                    WHEN 6 THEN 'ศ'
+                    WHEN 7 THEN 'ส'
+                    ELSE ''
+                END DowSupDate,
+                    CASE 
+				WHEN QtyToFact >= QtyReq THEN 'ครบแล้ว'
+				WHEN QtyPurchase = 0 AND YEAR(SupDueDate) < 2015  THEN 'สั่งซื้อแล้ว'
+				WHEN QtyPurchase > 0 AND YEAR(SupDueDate) < 2015  THEN 'ยังไม่ได้ใส่กำหนด'
+				WHEN QtyToFact < QtyReq AND SupDueDate < CAST(GETDATE() AS DATE) THEN 'ล่าช้า'
+				WHEN QtyToFact < QtyReq AND SupDueDate > CAST(GETDATE() AS DATE) THEN 'ปกติ'
+			END AS StatusShow
+        FROM PurchaseStatus PS JOIN Supplier ON PS.SupplierCode = Supplier.SupplierCode
+        WHERE OrderNumber = '${orderNumber}'
+        Order BY InvCode, SupplierName
+            `)
+        // console.log(result.recordset)
+        res.json(result.recordset);
+    } catch (error) {
+        res.json({ result: error });
+    }
+});
+
+
+router.post("/getPartForOrder_New", async (req, res) => {
+    const { orderNumber, isPart } = req.body;
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request().query(`
+            SELECT InvCode, (Qty)QtyReq, (0)AS QtyPurchase, (0)AS PcReceive, (0)AS QtyToFact, (0)AS QtyFactBalance, ('31/12/2565')AS SupDueDate, ('หล่อเอง')AS SupplierName
+            FROM OrderProductDetail
+            WHERE OrderNumber = '${orderNumber}' AND InvGroupCode IN('07','12', '15')
+            `)
+        res.json(result.recordset);
+    } catch (error) {
+        res.json({ result: error });
+    }
+});
+
+
+
+router.post("/getTotalQtybyPdProcess", async (req, res) => {
+    const { orderNumber } = req.body;
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request().query(`
+        SELECT PDProcessNew.PDProcessCode, PDProcessNew.PDProcessName, ISNULL(Total, 0) AS Total
+        FROM PDProcessNew LEFT JOIN (
+        SELECT PDProcessCode, SUM(In_Q + Send_Q + Out_Q)AS Total
+        FROM JobOrder JO JOIN JobStatus JS ON JO.JobNumber = JS.JobNumber
+        WHERE OrderNumber = '${orderNumber}'
+        GROUP BY PDProcessCode)AS SumValuesInProcess ON PDProcessNew.PDProcessCode = SumValuesInProcess.PDProcessCode
+        ORDER BY PDProcessNew.PDProcessSortBy
+            `)
+        res.json(result.recordset);
+    } catch (error) {
+        res.json({ result: error });
+    }
+});
+
+router.post("/getItemInProcess", async (req, res) => {
+    const { orderNumber, PDProcessCode } = req.body;
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request().query(`
+            SELECT	JO.OrderItemNo, PM.ProductID, PM.ProductCode, JO.JobNumber, JobQty, In_Q, In_W, Send_Q, Send_W, Out_Q, Out_W, 'http://192.168.3.5:3000/picture/'+REPLACE(SUBSTRING(PM.NewPict,4,200),'\','/')AS NewPict
+            FROM	JobOrder JO JOIN JobStatus JS ON JO.JobNumber = JS.JobNumber JOIN ProductMaster PM ON JO.ProductID = PM.ProductID
+            WHERE	OrderNumber = '${orderNumber}' AND PDProcessCode = '${PDProcessCode}' AND ( In_Q + Send_Q + Out_Q ) > 0
+            `)
+        res.json(result.recordset);
+    } catch (error) {
+        res.json({ result: error });
+    }
+});
 
 
 

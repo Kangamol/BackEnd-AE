@@ -4,8 +4,16 @@ const constants = require("./constant");
 const poolPromise = require("./connect_mssql");
 
 
+
+router.post('/pdf-mpp', async (req, res) => {
+    let dataBody = req.body;
+    console.log(dataBody);
+    res.json({ res: 'ok' });
+});
+
+
 //แสดงหน้าหลัก
-router.get("/getdevicemaster", async(req, res) => {
+router.get("/getdevicemaster", async (req, res) => {
     try {
         const pool = await poolPromise;
         const result = await pool.request().query(`
@@ -25,7 +33,7 @@ router.get("/getdevicemaster", async(req, res) => {
 });
 
 
-router.get("/getdeviceedit/:id", async(req, res) => {
+router.get("/getdeviceedit/:id", async (req, res) => {
     try {
         const { id } = req.params
         const pool = await poolPromise;
@@ -33,7 +41,7 @@ router.get("/getdeviceedit/:id", async(req, res) => {
         SELECT	JobTypeCode, CategoryCode, DeviceNo, FloorCode, RoomCode, PurchaseDate,
                 OutWarranty, Owner, Desciption, Status1, Status2, IPv4_1, IPv4_2
         FROM	MA.DevicesMaster
-        WHERE	ID = ${ id }
+        WHERE	ID = ${id}
             `);
         res.json(result.recordset);
     } catch (error) {
@@ -42,13 +50,13 @@ router.get("/getdeviceedit/:id", async(req, res) => {
 });
 
 
-router.delete("/getdevicemaster/:id", async(req, res) => {
+router.delete("/getdevicemaster/:id", async (req, res) => {
     try {
         const { id } = req.params
         const pool = await poolPromise;
         const result = await pool.request().query(`
             DELETE  MA.DevicesMaster
-            WHERE	MA.DevicesMaster.ID = ${ id }
+            WHERE	MA.DevicesMaster.ID = ${id}
             `);
         res.json({ result: constants.kResultOk })
     } catch (error) {
@@ -56,7 +64,7 @@ router.delete("/getdevicemaster/:id", async(req, res) => {
     }
 })
 
-router.get("/getcategory", async(req, res) => {
+router.get("/getcategory", async (req, res) => {
     try {
         const pool = await poolPromise;
         const result = await pool.request().query(`
@@ -70,7 +78,7 @@ router.get("/getcategory", async(req, res) => {
     }
 });
 
-router.get("/getfloor", async(req, res) => {
+router.get("/getfloor", async (req, res) => {
     try {
         const pool = await poolPromise;
         const result = await pool.request().query(`
@@ -82,7 +90,7 @@ router.get("/getfloor", async(req, res) => {
     }
 });
 
-router.get("/getroom", async(req, res) => {
+router.get("/getroom", async (req, res) => {
     try {
         const pool = await poolPromise;
         const result = await pool.request().query(`
@@ -95,26 +103,26 @@ router.get("/getroom", async(req, res) => {
 });
 
 // แก้ไข device 
-router.post("/edit-device/:id", async(req, res) => {
+router.post("/edit-device/:id", async (req, res) => {
     const { id } = req.params
     const { JobTypeCode, CategoryCode, DeviceNo, FloorCode, RoomCode, PurchaseDate, OutWarranty, Owner, Desciption, Status1, IPv4_1, IPv4_2 } = req.body
     try {
         const pool = await poolPromise;
         const result = await pool.request().query(`
             UPDATE MA.DevicesMaster SET 
-            JobTypeCode = '${ JobTypeCode }', 
-            CategoryCode = '${ CategoryCode }', 
-            DeviceNo = '${ DeviceNo }', 
-            FloorCode = '${ FloorCode }',
-            RoomCode = '${ RoomCode }',
-            PurchaseDate = '${ PurchaseDate }',
-            OutWarranty = '${ OutWarranty }',
-            Owner = '${ Owner }',
-            Desciption = '${ Desciption }',
-            Status1 = '${ Status1 }',
-            IPv4_1 = '${ IPv4_1 }',
-            IPv4_2 = '${ IPv4_2 }'
-            WHERE MA.DevicesMaster.ID = ${ id }
+            JobTypeCode = '${JobTypeCode}', 
+            CategoryCode = '${CategoryCode}', 
+            DeviceNo = '${DeviceNo}', 
+            FloorCode = '${FloorCode}',
+            RoomCode = '${RoomCode}',
+            PurchaseDate = '${PurchaseDate}',
+            OutWarranty = '${OutWarranty}',
+            Owner = '${Owner}',
+            Desciption = '${Desciption}',
+            Status1 = '${Status1}',
+            IPv4_1 = '${IPv4_1}',
+            IPv4_2 = '${IPv4_2}'
+            WHERE MA.DevicesMaster.ID = ${id}
               `);
         res.json({ result: constants.kResultOk });
     } catch (error) {
@@ -124,7 +132,7 @@ router.post("/edit-device/:id", async(req, res) => {
 
 
 // สร้าง device ใหม่
-router.post("/create-device", async(req, res) => {
+router.post("/create-device", async (req, res) => {
     const { JobTypeCode, CategoryCode, DeviceNo, FloorCode, RoomCode, PurchaseDate, OutWarranty, Owner, Desciption, Status1, IPv4_1, IPv4_2 } = req.body
     try {
         const pool = await poolPromise;
@@ -138,17 +146,17 @@ router.post("/create-device", async(req, res) => {
     }
 });
 
-router.get("/getemployee", async(req, res) => {
+router.get("/getemployee", async (req, res) => {
     try {
         const pool = await poolPromise;
-        const result = await pool.request().query(`SELECT EM.EmpCode, EM.EmpFullName FROM Employee EM`)
+        const result = await pool.request().query(`SELECT EM.EmpCode, (EM.EmpFName + ' (' + EM.NickName +')')AS EmpFullName FROM Employee EM`)
         res.json(result.recordset);
     } catch (error) {
         res.json({ result: "ERROR /getemployee" });
     }
 })
 
-router.get("/getRepairDetail/:id", async(req, res) => {
+router.get("/getRepairDetail/:id", async (req, res) => {
     const { id } = req.params;
     try {
         const pool = await poolPromise;
@@ -165,13 +173,32 @@ router.get("/getRepairDetail/:id", async(req, res) => {
     }
 })
 
-router.post("/updatestatusdevice", async(req, res) => {
+router.post("/updatestatusdevice", async (req, res) => {
     const { ID, Status1 } = req.body;
     try {
         const pool = await poolPromise;
         const result = await pool.request().query(`
         UPDATE MA.DevicesMaster SET Status1 = '${Status1}'
         WHERE	ID = ${ID}
+        `)
+        res.json({ result: constants.kResultOk });
+    } catch {
+        res.json({ result: constants.kResultNok });
+    }
+})
+
+router.post("/createCategoryDevice", async (req, res) => {
+    const { section, category } = req.body;
+    // console.log(section)
+    // console.log(category)
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request().query(`
+        DECLARE @jobType VARCHAR(3) = '${section}'
+        INSERT INTO MA.Category
+        VALUES ('${section}' , (SELECT IIF(@jobType = '01' , 'A' + RIGHT('0' + CAST(MAX(CAST(SUBSTRING(CategoryCode, 2, 5) AS INT)) + 1 AS VARCHAR) ,2) , 'B' + RIGHT('0' + CAST(MAX(CAST(SUBSTRING(CategoryCode, 2, 5) AS INT)) + 1 AS VARCHAR) , 2)) 
+        FROM MA.Category
+        WHERE JobTypeCode = @jobType AND CAST(SUBSTRING(CategoryCode, 2, 5) AS INT) < 99) , '${category}')
         `)
         res.json({ result: constants.kResultOk });
     } catch {

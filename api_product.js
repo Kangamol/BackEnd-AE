@@ -23,7 +23,7 @@ router.post("/productCalprice", async (req, res) => {
         DECLARE @ProductID_Input VARCHAR(30) = '${ProductID_Input}'
         
         SELECT	ProductID, ProductCode, ProductDesc, 
-                ('http://172.16.0.5:3000/picture/'+REPLACE(SUBSTRING(NewPict,4,200),'\','/'))AS NewPict,
+                ('http://192.168.3.5:3000/picture/'+REPLACE(SUBSTRING(NewPict,4,200),'\','/'))AS NewPict,
                 NetWeightCal,
                 (SilverPrice * @Silver_TopUp)AS TotalSilverPrice,
                 (MatPrice * @Material_TopUp)AS TotalMatPrice,

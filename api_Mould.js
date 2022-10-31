@@ -6,11 +6,11 @@ const poolPromise = require("./connect_mssql");
 module.exports = router;
 
 
-router.get("/getmouldbill", async(req, res) => {
+router.get("/getmouldbill", async (req, res) => {
     try {
         const pool = await poolPromise;
         const result = await pool.request().query(`
-        SELECT	MM.ID, MM.DocID, MM.BillDate, MM.Owner, (EO.EmpFullName)AS OwnerFullName, 
+        SELECT	MM.ID, MM.DocID, MM.BillDate, MM.Owner, (EO.EmpFName + ' ( ' + EO.NickName + ' )')AS OwnerFullName, 
                 MM.OrderNumber, MM.ModelNo, MM.Qty, MM.JobType, JN.JobTypeName,
                 MM.Receiver, (ER.EmpFullName)AS ReceiverFullName, ReceiveDate,
                 MM.ReturnPerson, (ET.EmpFullName)AS ReturnPersonFullName,MM.ReturnDate, 
@@ -68,7 +68,7 @@ router.get("/getmouldbill", async(req, res) => {
                 END dowReturnDate,
                 MM.DepartCode, AM.DepartName, DueDate,
                 (ISNULL(DATEDIFF(DAY, IIF(MM.ReturnDate IS NULL, GETDATE(), MM.ReturnDate), MM.DueDate), 0))AS LateDate, remark,
-                'http://172.16.0.5:3000/picture/PICTURE3/Art Event Logo2.jpg'AS NewPict
+                'http://192.168.3.5:3000/picture/PICTURE3/Art Event Logo2.jpg'AS NewPict
         FROM	Mould.MouldLentMaster MM 
                 LEFT JOIN Employee EO ON MM.Owner = EO.EmpCode
                 LEFT JOIN Mould.JobTypeName JN ON MM.JobType = JN.JobType
@@ -76,16 +76,18 @@ router.get("/getmouldbill", async(req, res) => {
                 LEFT JOIN Employee ET ON MM.ReturnPerson = ET.EmpCode
                 LEFT JOIN Employee EP ON MM.PreparePerson = EP.EmpCode
                 LEFT JOIN Mould.AEDepartment AM ON MM.DepartCode = AM.DepartCode
-        WHERE	ISNULL((DATEPART(DAYOFYEAR, GETDATE()) - DATEPART(DAYOFYEAR, ReturnDate)),0)  < 30
+        WHERE	ISNULL(ReturnDate, GETDATE())  > DATEADD(DAY,-30,GETDATE())
         ORDER BY  MM.Status, MM.BillDate DESC
             `);
+        //** OLD
+        // WHERE	ISNULL((DATEPART(DAYOFYEAR, GETDATE()) - DATEPART(DAYOFYEAR, ReturnDate)),0)  < 30
         res.json(result.recordset)
     } catch (error) {
         res.json({ result: constants.kResultNok })
     }
 })
 
-router.get("/getmouldbill/:ModelNo", async(req, res) => {
+router.get("/getmouldbill/:ModelNo", async (req, res) => {
     const { ModelNo } = req.params
     try {
         const pool = await poolPromise;
@@ -148,7 +150,7 @@ router.get("/getmouldbill/:ModelNo", async(req, res) => {
                 END dowReturnDate,
                 MM.DepartCode, AM.DepartName, DueDate,
                 (ISNULL(DATEDIFF(DAY, IIF(MM.ReturnDate IS NULL, GETDATE(), MM.ReturnDate), MM.DueDate), 0))AS LateDate, remark,
-                'http://172.16.0.5:3000/picture/PICTURE3/Art Event Logo2.jpg'AS NewPict
+                'http://192.168.3.5:3000/picture/PICTURE3/Art Event Logo2.jpg'AS NewPict
         FROM	Mould.MouldLentMaster MM 
                 LEFT JOIN Employee EO ON MM.Owner = EO.EmpCode
                 LEFT JOIN Mould.JobTypeName JN ON MM.JobType = JN.JobType
@@ -156,7 +158,7 @@ router.get("/getmouldbill/:ModelNo", async(req, res) => {
                 LEFT JOIN Employee ET ON MM.ReturnPerson = ET.EmpCode
                 LEFT JOIN Employee EP ON MM.PreparePerson = EP.EmpCode
                 LEFT JOIN Mould.AEDepartment AM ON MM.DepartCode = AM.DepartCode
-        WHERE	ModelNo = '${ ModelNo }'
+        WHERE	ModelNo = '${ModelNo}'
         ORDER BY  MM.Status, MM.BillDate DESC
             `);
         res.json(result.recordset)
@@ -167,7 +169,7 @@ router.get("/getmouldbill/:ModelNo", async(req, res) => {
 
 
 
-router.post("/getmouldbillDetail", async(req, res) => {
+router.post("/getmouldbillDetail", async (req, res) => {
     const { ModelNo } = req.body
     // console.log(ModelNo);
     try {
@@ -192,11 +194,11 @@ router.post("/getmouldbillDetail", async(req, res) => {
 })
 
 //ดึง Orderมา เพื่อเลือก
-router.get("/getmouldordernumberwip", async(req, res) => {
+router.get("/getmouldordernumberwip", async (req, res) => {
     try {
         const pool = await poolPromise;
         const result = await pool.request().query(`
-        SELECT	OrderNumber FROM OrderMaster
+        SELECT	RTRIM(OrderNumber)AS OrderNumber FROM OrderMaster
         WHERE	YEAR(OrderDate) >= 2021 AND LEFT(OrderNumber, 3) = 'CH-' AND LEFT(OrderNumber, 5) != 'CH-M-' AND Status = '2'  
             `);
         res.json(result.recordset)
@@ -206,7 +208,7 @@ router.get("/getmouldordernumberwip", async(req, res) => {
 })
 
 
-router.get("/getmouldordernumber-ex", async(req, res) => {
+router.get("/getmouldordernumber-ex", async (req, res) => {
     try {
         const pool = await poolPromise;
         const result = await pool.request().query(`
@@ -220,18 +222,18 @@ router.get("/getmouldordernumber-ex", async(req, res) => {
 })
 
 //ส่ง OrderNumber มาเพื่อไปดึง แม่พิมพ์มา
-router.post("/getmodelmould", async(req, res) => {
+router.post("/getmodelmould", async (req, res) => {
     const { OrderNumber } = req.body
     try {
         const pool = await poolPromise;
         const result = await pool.request().query(`
-        SELECT	NULL AS checkBox, (CastingNo)AS ModelNo, 'http://172.16.0.5:3000/picture/'+REPLACE(SUBSTRING(NewPict,4,200),'\','/') NewPict,
+        SELECT	NULL AS checkBox, (CastingNo)AS ModelNo, 'http://192.168.3.5:3000/picture/'+REPLACE(SUBSTRING(NewPict,4,200),'\','/') NewPict,
         (0) AS Qty, ('') AS JobType, ('') AS remark
         FROM
         (SELECT	DISTINCT(PM.CastingNo), 
                 (SELECT ModelPicture FROM ModelMasterNew WHERE ModelNumber = PM.CastingNo)AS NewPict
         FROM	OrderDetail OD JOIN ProductMaster PM ON OD.ProductID = PM.ProductID
-        WHERE	OD.OrderNumber = '${ OrderNumber }' AND CastingNo != '')AS A
+        WHERE	OD.OrderNumber = '${OrderNumber}' AND CastingNo != '')AS A
             `);
         res.json(result.recordset)
     } catch (error) {
@@ -242,11 +244,11 @@ router.post("/getmodelmould", async(req, res) => {
 // WHERE OrderNumber = '' 
 
 //ดึงแม่พิมพ์มาแบบทั้งหมด
-router.get("/getmodelmouldall", async(req, res) => {
+router.get("/getmodelmouldall", async (req, res) => {
     try {
         const pool = await poolPromise;
         const result = await pool.request().query(`
-            SELECT (ModelNumber)AS ModelNo, 'http://172.16.0.5:3000/picture/'+REPLACE(SUBSTRING(ModelPicture,4,200),'\','/') NewPict
+            SELECT (ModelNumber)AS ModelNo, 'http://192.168.3.5:3000/picture/'+REPLACE(SUBSTRING(ModelPicture,4,200),'\','/') NewPict
             FROM ModelMasterNew
             `);
         res.json(result.recordset)
@@ -258,7 +260,7 @@ router.get("/getmodelmouldall", async(req, res) => {
 
 
 
-router.get("/getjobmould", async(req, res) => {
+router.get("/getjobmould", async (req, res) => {
     try {
         const pool = await poolPromise;
         const result = await pool.request().query(`
@@ -271,13 +273,13 @@ router.get("/getjobmould", async(req, res) => {
 })
 
 //ดึงข้อมูลแบบส่ง ID ไป เพื่อนำมาแก้ไขข้อมูล
-router.get("/getmodifymouldbill/:id", async(req, res) => {
+router.get("/getmodifymouldbill/:id", async (req, res) => {
     const { id } = req.params
     try {
         const pool = await poolPromise;
         const result = await pool.request().query(`
                 SELECT MM.* , EY.EmpFullName  FROM  Mould.MouldLentMaster MM LEFT JOIN Employee EY ON MM.Owner = EY.EmpCode 
-                WHERE ID = ${ id }
+                WHERE ID = ${id}
             `);
         res.json(result.recordset)
     } catch (error) {
@@ -290,8 +292,8 @@ router.get("/getmodifymouldbill/:id", async(req, res) => {
 
 
 
-router.post("/insertbillmould", async(req, res) => {
-    const { Owner, OrderNumber, ModelNo, Qty, JobType, DepartCode, DueDate, RepairModelDesc, Status , remark } = req.body
+router.post("/insertbillmould", async (req, res) => {
+    const { Owner, OrderNumber, ModelNo, Qty, JobType, DepartCode, DueDate, RepairModelDesc, Status, remark } = req.body
     // console.log(Owner, OrderNumber, ModelNo, Qty, JobType, Receiver, RepairModelDesc, Status)
     try {
         const pool = await poolPromise;
@@ -319,7 +321,7 @@ router.post("/insertbillmould", async(req, res) => {
 });
 
 
-router.delete("/deletebillmould/:id", async(req, res) => {
+router.delete("/deletebillmould/:id", async (req, res) => {
     const { id } = req.params
     try {
         const pool = await poolPromise;
@@ -337,8 +339,8 @@ router.delete("/deletebillmould/:id", async(req, res) => {
 
 
 
-router.post("/updatestatusmould", async(req, res) => {
-    const { billID, ReturnPerson, ReturnDate, RepairModelDesc, StatusID} = req.body
+router.post("/updatestatusmould", async (req, res) => {
+    const { billID, ReturnPerson, ReturnDate, RepairModelDesc, StatusID } = req.body
     // console.log(billID, ReturnPerson, ReturnDate, RepairModelDesc, StatusID)
     try {
         const pool = await poolPromise;
@@ -348,7 +350,7 @@ router.post("/updatestatusmould", async(req, res) => {
                     ReturnDate = ${ReturnDate}, 
                     RepairModelDesc = '${RepairModelDesc}',
                     Status = '${StatusID}'
-                WHERE	ID = ${ billID }
+                WHERE	ID = ${billID}
         `);
         res.json({ result: constants.kResultOk });
     } catch (error) {
@@ -357,18 +359,18 @@ router.post("/updatestatusmould", async(req, res) => {
 });
 
 
-router.post("/updatestatusmould02", async(req, res) => {
-    const { billID, PreparePerson, PrepareDate, RepairModelDesc, StatusID} = req.body
+router.post("/updatestatusmould02", async (req, res) => {
+    const { billID, PreparePerson, PrepareDate, RepairModelDesc, StatusID } = req.body
     // console.log(billID, ReturnPerson, ReturnDate, RepairModelDesc, StatusID)
     try {
         const pool = await poolPromise;
-                const result = await pool.request().query(`
+        const result = await pool.request().query(`
                 UPDATE Mould.MouldLentMaster 
                 SET PreparePerson = '${PreparePerson}', 
                     PrepareDate = GETDATE(), 
                     RepairModelDesc = '${RepairModelDesc}',
                     Status = '${StatusID}'
-                WHERE	ID = ${ billID }
+                WHERE	ID = ${billID}
         `);
         res.json({ result: constants.kResultOk });
     } catch (error) {
@@ -377,18 +379,18 @@ router.post("/updatestatusmould02", async(req, res) => {
 });
 
 
-router.post("/updatestatusmould03", async(req, res) => {
-    const { billID, Receiver, ReceiveDate, RepairModelDesc, StatusID} = req.body
+router.post("/updatestatusmould03", async (req, res) => {
+    const { billID, Receiver, ReceiveDate, RepairModelDesc, StatusID } = req.body
     // console.log(billID, ReturnPerson, ReturnDate, RepairModelDesc, StatusID)
     try {
         const pool = await poolPromise;
-                const result = await pool.request().query(`
+        const result = await pool.request().query(`
 				UPDATE Mould.MouldLentMaster 
                 SET Receiver = '${Receiver}', 
                     ReceiveDate = GETDATE(), 
                     RepairModelDesc = '${RepairModelDesc}',
                     Status = '${StatusID}'
-                WHERE	ID = ${ billID }
+                WHERE	ID = ${billID}
         `);
         res.json({ result: constants.kResultOk });
     } catch (error) {
@@ -397,18 +399,18 @@ router.post("/updatestatusmould03", async(req, res) => {
 });
 
 
-router.post("/updatestatusmould04", async(req, res) => {
-    const { billID, ReturnPerson, ReturnDate, RepairModelDesc, StatusID} = req.body
+router.post("/updatestatusmould04", async (req, res) => {
+    const { billID, ReturnPerson, ReturnDate, RepairModelDesc, StatusID } = req.body
     // console.log(billID, ReturnPerson, ReturnDate, RepairModelDesc, StatusID)
     try {
         const pool = await poolPromise;
-            const result = await pool.request().query(`
+        const result = await pool.request().query(`
                 UPDATE Mould.MouldLentMaster 
                 SET ReturnPerson = '${ReturnPerson}', 
                     ReturnDate = GETDATE(), 
                     RepairModelDesc = '${RepairModelDesc}',
                     Status = '${StatusID}'
-                WHERE	ID = ${ billID }
+                WHERE	ID = ${billID}
         `);
         res.json({ result: constants.kResultOk });
     } catch (error) {
@@ -419,7 +421,7 @@ router.post("/updatestatusmould04", async(req, res) => {
 
 
 //ดึงข้อมูลแบบส่ง ID ไป เพื่อนำมาแก้ไขข้อมูล
-router.get("/moulddepart", async(req, res) => {
+router.get("/moulddepart", async (req, res) => {
     try {
         const pool = await poolPromise;
         const result = await pool.request().query(`
@@ -431,12 +433,12 @@ router.get("/moulddepart", async(req, res) => {
     }
 })
 
-router.post("/ModifyBillMould", async(req, res) => {
-    const { ID, DepartCode, DueDate, OrderNumber, ModelNo, Qty, JobType, Status, remark} = req.body
+router.post("/ModifyBillMould", async (req, res) => {
+    const { ID, DepartCode, DueDate, OrderNumber, ModelNo, Qty, JobType, Status, remark } = req.body
     console.log(DueDate)
     try {
         const pool = await poolPromise;
-            const result = await pool.request().query(`
+        const result = await pool.request().query(`
                 UPDATE Mould.MouldLentMaster SET
                         DepartCode = '${DepartCode}',
                         DueDate = '${DueDate}',
@@ -454,12 +456,12 @@ router.post("/ModifyBillMould", async(req, res) => {
     }
 });
 
-router.post("/selectpictmould", async(req, res) => {
+router.post("/selectpictmould", async (req, res) => {
     const { ModelNo } = req.body
     try {
         const pool = await poolPromise;
-            const result = await pool.request().query(`
-            SELECT 'http://172.16.0.5:3000/picture/'+REPLACE(SUBSTRING(ModelPicture,4,200),'\','/')AS NewPict FROM ModelMasterNew
+        const result = await pool.request().query(`
+            SELECT 'http://192.168.3.5:3000/picture/'+REPLACE(SUBSTRING(ModelPicture,4,200),'\','/')AS NewPict FROM ModelMasterNew
             WHERE	ModelNumber = '${ModelNo}'
         `);
         res.json(result.recordset);
