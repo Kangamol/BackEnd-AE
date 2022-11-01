@@ -73,6 +73,7 @@ router.post("/insertrepairdoc", async (req, res) => {
 
 router.post("/getbillrepairdoc", async (req, res) => {
     const { jobDate, JobTypeCode, Status } = req.body
+    console.log(req.body)
     try {
         const pool = await poolPromise;
         const { recordset } = await pool.request().query(`
@@ -80,7 +81,7 @@ router.post("/getbillrepairdoc", async (req, res) => {
                 ContactPerson, (EM.EmpFName + ' ( ' + EM.NickName + ' )')AS ContactPersonName, 
                 BrokenDes + IIF(RepairBillNo = '', '', ' (บิลแผนก : ' +(SELECT PDProcessName FROM PDProcess WHERE PDProcessCode = (SUBSTRING(RepairBillNo,2,2))) + ')')AS BrokenDes, RepairBillNo, 
                 RD.Status, FloorName, RD.PartPrice, RD.RepairPrice, RD.RepairDes, Approver, ApprovStatus, 
-                (EA.EmpFullName)AS  ApprovName, Tel, JobDate, RD.DueDate, FinishDate, Notifier, 
+                (EA.EmpFullName)AS  ApprovName, Tel, DATEADD(HH, -7, JobDate)AS JobDate, RD.DueDate, DATEADD(HH, -7, FinishDate)AS FinishDate, Notifier, 
                 (EN.EmpFName + ' ( ' + EN.NickName +' ) ')AS NotifierName,
                 ('http://192.168.3.5:3000/picture/'+REPLACE(SUBSTRING(EM.EmpPict,4,200),'\','/'))AS ContactPersonPict,
                 ('http://192.168.3.5:3000/picture/'+REPLACE(SUBSTRING(EN.EmpPict,4,200),'\','/'))AS NotifierPict,
@@ -95,7 +96,9 @@ router.post("/getbillrepairdoc", async (req, res) => {
                         LEFT JOIN Employee EM ON RD.ContactPerson = EM.EmpCode
                         LEFT JOIN Employee EA ON RD.Approver = EA.EmpCode
                         LEFT JOIN Employee EN ON RD.Notifier = EN.EmpCode 
-                WHERE CAST(JobDate AS DATE) BETWEEN '${jobDate[0]}' AND '${jobDate[1]}' AND RD.JobTypeCode IN ('${JobTypeCode[0]}', '${JobTypeCode[1]}', '${JobTypeCode[2]}') AND RD.Status IN ('${Status[0]}', '${Status[1]}', '${Status[2]}', '${Status[3]}')
+                WHERE   (CAST(JobDate AS DATE) BETWEEN '${jobDate[0]}' AND '${jobDate[1]}' OR RD.Status IN ('0', '1', '2'))
+                        AND RD.JobTypeCode IN ('${JobTypeCode[0]}', '${JobTypeCode[1]}', '${JobTypeCode[2]}') 
+                        AND RD.Status IN ('${Status[0]}', '${Status[1]}', '${Status[2]}', '${Status[3]}', '${Status[4]}')
                 ORDER BY  RD.Status , RD.JobDate
         `);
         // console.log(recordset)
@@ -110,54 +113,26 @@ router.get("/getbillrepairdocdetail/:id", async (req, res) => {
     try {
         const pool = await poolPromise;
         const result = await pool.request().query(`
-            SELECT	BillID, BillDoc, JT.JobTypeCode, JT.JobTypeName, CategoryName, RA.RoomName, DeviceNo,
-                    ContactPerson, (EM.EmpFullName)AS ContactPersonName, BrokenDes, RD.Status, FloorName,
-                    RD.PartPrice, RD.RepairPrice, RD.RepairDes, Approver, ApprovStatus, (EA.EmpFullName)AS  ApprovName,
-                    CASE DATEPART(WEEKDAY,RD.JobDate)
-                                WHEN 1 THEN 'อา'
-                                WHEN 2 THEN 'จ'
-                                WHEN 3 THEN 'อ'
-                                WHEN 4 THEN 'พ'
-                                WHEN 5 THEN 'พฤ'
-                                WHEN 6 THEN 'ศ'
-                                WHEN 7 THEN 'ส'
-                                ELSE ''
-                    END dowJobDate, JobDate,
-                    CASE DATEPART(WEEKDAY,RD.DueDate)
-                                WHEN 1 THEN 'อา'
-                                WHEN 2 THEN 'จ'
-                                WHEN 3 THEN 'อ'
-                                WHEN 4 THEN 'พ'
-                                WHEN 5 THEN 'พฤ'
-                                WHEN 6 THEN 'ศ'
-                                WHEN 7 THEN 'ส'
-                                ELSE ''
-                    END dowDueDate, RD.DueDate,
-                    CASE DATEPART(WEEKDAY,RD.FinishDate)
-                                WHEN 1 THEN 'อา'
-                                WHEN 2 THEN 'จ'
-                                WHEN 3 THEN 'อ'
-                                WHEN 4 THEN 'พ'
-                                WHEN 5 THEN 'พฤ'
-                                WHEN 6 THEN 'ศ'
-                                WHEN 7 THEN 'ส'
-                                ELSE ''
-                    END dowFinishDate, FinishDate, Notifier, (EN.EmpFullName)AS NotifierName,
-                    ('http://192.168.3.5:3000/picture/'+REPLACE(SUBSTRING(EM.EmpPict,4,200),'\','/'))AS ContactPersonPict,
-					('http://192.168.3.5:3000/picture/'+REPLACE(SUBSTRING(EN.EmpPict,4,200),'\','/'))AS NotifierPict,
-					('http://192.168.3.5:3000/picture/'+REPLACE(SUBSTRING(EA.EmpPict,4,200),'\','/'))AS ApproverPict,
-                    SUBSTRING((SELECT CONVERT(VARCHAR, RD.JobDate, 108)),1,5)AS JobDateTime,
-                    SUBSTRING((SELECT CONVERT(VARCHAR, RD.FinishDate, 108)),1,5)AS FinishDateTime
-            FROM	MA.RepairDocument RD
-                    LEFT JOIN MA.JobType JT ON RD.JobTypeCode = JT.JobTypeCode
-                    LEFT JOIN MA.Category CG ON RD.JobTypeCode = CG.JobTypeCode AND RD.CategoryCode = CG.CategoryCode
-                    LEFT JOIN MA.FloorAE FA ON RD.FloorCode = FA.FloorCode
-                    LEFT JOIN MA.RoomAE RA ON RD.FloorCode = RA.FloorCode AND RD.RoomCode = RA.RoomCode
-                    LEFT JOIN Employee EM ON RD.ContactPerson = EM.EmpCode
-                    LEFT JOIN Employee EA ON RD.Approver = EA.EmpCode
-                    LEFT JOIN Employee EN ON RD.Notifier = EN.EmpCode
-            WHERE BillID = ${id}
-            ORDER BY RD.Status, RD.JobDate DESC  
+            SELECT	BillID, BillDoc, JT.JobTypeName, CategoryName, RA.RoomName, IIF(DeviceNo = 'null', '', DeviceNo)AS DeviceNo,
+                ContactPerson, (EM.EmpFName + ' ( ' + EM.NickName + ' )')AS ContactPersonName, 
+                BrokenDes + IIF(RepairBillNo = '', '', ' (บิลแผนก : ' +(SELECT PDProcessName FROM PDProcess WHERE PDProcessCode = (SUBSTRING(RepairBillNo,2,2))) + ')')AS BrokenDes, RepairBillNo, 
+                RD.Status, FloorName, RD.PartPrice, RD.RepairPrice, RD.RepairDes, Approver, ApprovStatus, 
+                (EA.EmpFullName)AS  ApprovName, Tel, DATEADD(HH, -7, JobDate)AS JobDate, RD.DueDate, DATEADD(HH, -7, FinishDate)AS FinishDate, Notifier, 
+                (EN.EmpFName + ' ( ' + EN.NickName +' ) ')AS NotifierName,
+                ('http://192.168.3.5:3000/picture/'+REPLACE(SUBSTRING(EM.EmpPict,4,200),'\','/'))AS ContactPersonPict,
+                ('http://192.168.3.5:3000/picture/'+REPLACE(SUBSTRING(EN.EmpPict,4,200),'\','/'))AS NotifierPict,
+                ('http://192.168.3.5:3000/picture/'+REPLACE(SUBSTRING(EA.EmpPict,4,200),'\','/'))AS ApproverPict,
+                DATEDIFF(DAY, CAST(GETDATE() AS date), IIF(YEAR(DueDate) >= 2564 , DATEADD(YEAR, -543, DueDate), DueDate))AS DateWIP,
+                DATEDIFF(DAY, CAST(JobDate AS date), CAST(FinishDate AS date))AS WorkinTime
+                FROM	MA.RepairDocument RD
+                        JOIN MA.JobType JT ON RD.JobTypeCode = JT.JobTypeCode
+                        JOIN MA.Category CG ON RD.JobTypeCode = CG.JobTypeCode AND RD.CategoryCode = CG.CategoryCode
+                        LEFT JOIN MA.FloorAE FA ON RD.FloorCode = FA.FloorCode
+                        LEFT JOIN MA.RoomAE RA ON RD.FloorCode = RA.FloorCode AND RD.RoomCode = RA.RoomCode
+                        LEFT JOIN Employee EM ON RD.ContactPerson = EM.EmpCode
+                        LEFT JOIN Employee EA ON RD.Approver = EA.EmpCode
+                        LEFT JOIN Employee EN ON RD.Notifier = EN.EmpCode 
+            WHERE BillID = ${id} 
         `);
         res.json({ result: result.recordset, message: constants.kResultOk });
     } catch {
