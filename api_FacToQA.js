@@ -668,9 +668,7 @@ router.post("/getBillRepairbyJob", async (req, res) => {
                         FROM	qaRepairMaster                            
                                 LEFT JOIN qaBillMaster ON qaRepairMaster.qaBill_ID = qaBillMaster.qaBill_ID                            
                                 LEFT JOIN OrderMaster ON OrderMaster.OrderNumber = qaRepairMaster.OrderNumber                            
-                                LEFT JOIN Customer ON OrderMaster.CusCode = Customer.CusCode
-                        WHERE	YEAR(DueDate) >= YEAR(GETDATE()) AND OrderMaster.Status = '2' AND LEFT(OrderMaster.OrderNumber,5) != 'CH-M-' AND LEFT(OrderMaster.OrderNumber,3) = 'CH-' 
-                                    AND LEFT(OrderMaster.OrderNumber,7) != 'CH-TEST' AND CAST(DueDate AS DATE) > CAST(DATEADD(MONTH, -2, GETDATE())AS DATE))AS A
+                                LEFT JOIN Customer ON OrderMaster.CusCode = Customer.CusCode)AS A
         WHERE	qaRepair_ID IN (SELECT qaRepair_ID FROM @table)
         ORDER BY qaRepairStatus, repairDate 
 
@@ -715,14 +713,25 @@ router.post("/getBillRepairForFac", async (req, res) => {
         const pool = await poolPromise;
         const { recordsets } = await pool.request().query(`
 	DECLARE @tableFilter TABLE (qaRepair_ID INT) 
-	INSERT INTO @tableFilter 	SELECT ${orderFilter === '' ? 'TOP 100' : ''} qaRepair_ID FROM qaRepairMaster JOIN OrderMaster ON OrderMaster.OrderNumber = qaRepairMaster.OrderNumber JOIN Customer ON OrderMaster.CusCode = Customer.CusCode
+	INSERT INTO @tableFilter 
+	SELECT ${orderFilter === '' ? 'TOP 100' : ''} qaRepair_ID FROM (
+	SELECT	qaRepairMaster.qaRepair_ID, SUM(qaRepairDetail.RepairFinish)AS RepairFinish, SUM(qaRepairDetail.Qty)AS Qty, qaRepairStatus, repairDate
+	FROM	qaRepairMaster JOIN OrderMaster ON OrderMaster.OrderNumber = qaRepairMaster.OrderNumber JOIN Customer ON OrderMaster.CusCode = Customer.CusCode
+			JOIN qaRepairDetail ON qaRepairMaster.qaRepair_ID = qaRepairDetail.qaRepair_ID				
 	WHERE	YEAR(DueDate) >= YEAR(GETDATE()) AND OrderMaster.Status = '2' AND LEFT(OrderMaster.OrderNumber,5) != 'CH-M-' AND LEFT(OrderMaster.OrderNumber,3) = 'CH-' 
-								AND LEFT(OrderMaster.OrderNumber,7) != 'CH-TEST' AND CAST(DueDate AS DATE) > CAST(DATEADD(MONTH, -2, GETDATE())AS DATE)
+								AND LEFT(OrderMaster.OrderNumber,7) != 'CH-TEST'
 								AND qaRepairMaster.OrderNumber LIKE '%${orderFilter.toUpperCase()}%' AND ProductionTeam IN ('${ProductionTeam[0]}', '${ProductionTeam[1]}', '${ProductionTeam[2]}', '${ProductionTeam[3]}')
-								AND repairDate BETWEEN '${billDate[0]}' AND '${billDate[1]}' 
-                                AND Customer.Status IN (${salesTeam[0] ? salesTeam[0] : 0}, ${salesTeam[1] ? salesTeam[1] : 0} , ${salesTeam[2] ? salesTeam[2] : 0}) AND qaRepairStatus IN ('', '1', '2', '3')
-	
-	--MASTER
+								AND (repairDate BETWEEN '${billDate[0]}' AND '${billDate[1]}' OR qaRepairStatus IN ('',  '2'))
+                                AND Customer.Status IN (${salesTeam[0] ? salesTeam[0] : 0}, ${salesTeam[1] ? salesTeam[1] : 0} , ${salesTeam[2] ? salesTeam[2] : 0})
+	GROUP BY qaRepairMaster.qaRepair_ID, qaRepairStatus, repairDate)AS A
+	WHERE RepairFinish < Qty
+	ORDER BY 
+		CASE 
+			WHEN qaRepairStatus = ''  THEN 1
+			WHEN qaRepairStatus = '2' THEN 2
+		ELSE 3 END, repairDate  
+
+    --MASTER
 	SELECT * FROM  (SELECT	qaRepairMaster.qaRepair_ID, qaRepairMaster.repairDocNumber, qaBillMaster.qaDocNumber, OrderMaster.ProductionTeam, qaRepairMaster.OrderNumber, 
 					qaRepairMaster.ReceiverNew, qaRepairMaster.SenderNew,  DATEADD(HH, -7, qaRepairMaster.receiveDate)AS receiveDate, 
 					(SELECT (EM.EmpFName + ' (' + EM.NickName +')')AS EmpFullName FROM Employee EM WHERE EmpCode = qaRepairMaster.SenderNew)AS Sender,
@@ -744,8 +753,11 @@ router.post("/getBillRepairForFac", async (req, res) => {
 							LEFT JOIN OrderMaster ON OrderMaster.OrderNumber = qaRepairMaster.OrderNumber                            
 							LEFT JOIN Customer ON OrderMaster.CusCode = Customer.CusCode
 					WHERE qaRepairMaster.qaRepair_ID IN (SELECT qaRepair_ID FROM @tableFilter))AS A
-	WHERE A.TotalFinishQty < TotalQty 
-    ORDER BY qaRepairStatus, repairDate 
+    ORDER BY CASE 
+		WHEN qaRepairStatus = ''  THEN 1
+		WHEN qaRepairStatus = '2' THEN 2
+		ELSE 3 
+		END, repairDate  
 
 	--DETAIL
 	SELECT	qaRepairMaster.qaRepair_ID, qaRepairDetail.qaJobNumber, OrderDetail.ProductCode, repair_Item, qaRepairDetail.Qty, ToQa, RepairFinish, (0)AS sentRepair,
@@ -999,6 +1011,65 @@ router.post("/getqabillbyorderitem", async (req, res) => {
         WHERE QM.OrderNumber = '${orderNumber}' AND OrderItemNo = ${OrderItemNo}
     `);
         res.json(recordset);
+        await pool.close;
+    } catch (error) {
+        res.status(500).json({ result: constants.kResultNok });
+    }
+});
+
+
+router.post("/reportfactoqa-detail", async (req, res) => {
+    const { orderNumber, billDate } = req.body;
+    console.log(orderNumber, billDate)
+    try {
+        const pool = await poolPromise;
+        const { recordsets } = await pool.request().query(`
+            DECLARE @DATE DATE = '${billDate}'
+            DECLARE @OrderNumber VARCHAR(30) = '${orderNumber}'
+
+            SELECT ROW_NUMBER() OVER (ORDER by ForSort, ItemNo)AS ItemNoForFac, ItemNo, OD.ProductCode, 'http://192.168.3.5:3000/picture/'+REPLACE(REPLACE(SUBSTRING(NewPict,4,200),'\','/'),'#','%23') NewPict,Qty
+            FROM OrderDetail OD JOIN ProductMaster PM ON OD.ProductID = PM.ProductID
+            WHERE OrderNumber = @OrderNumber
+
+            -- FAC SEND
+            SELECT OrderItemNo, (SELECT (EM.EmpFName + ' (' + EM.NickName +')')AS EmpFullName FROM Employee EM WHERE EmpCode = QCPerson)AS QCPerson, 
+                    SUM(Qty)AS QtyFac FROM qaBillMaster QM JOIN qaBillDetail QD ON QM.qaBill_ID = QD.qaBill_ID
+            WHERE CAST(billDate AS DATE) = @DATE AND QM.OrderNumber = @OrderNumber 
+            GROUP BY OrderItemNo, QCPerson
+
+            -- QA PASS
+            SELECT	OrderItemNo, (SELECT (EM.EmpFName + ' (' + EM.NickName +')')AS EmpFullName FROM Employee EM WHERE EmpCode = FD.QAPerson)AS QAPerson, 
+                    SUM(FD.Qty)AS QtyFinish 
+            FROM	qaFinishMaster FM JOIN qaFinishDetail FD ON FM.qaFinish_ID = FD.qaFinish_ID 
+                    JOIN qaBillDetail QD ON FM.qaBill_ID = QD.qaBill_ID AND FD.bill_Item = QD.bill_Item 
+            WHERE	CAST(finishDate AS DATE) = @DATE AND FM.OrderNumber = @OrderNumber 
+            GROUP BY OrderItemNo, FD.QAPerson
+
+            -- QA REPAIR
+            SELECT	OrderItemNo, RTM.repairType, RTD.reasonType, SUM(RDR.Qty)AS TotalRepair 
+            FROM	qaRepairMaster RM JOIN qaRepairDetail RD ON RM.qaRepair_ID = RD.qaRepair_ID 
+                    JOIN qaBillDetail QD ON RM.qaBill_ID = QD.qaBill_ID AND RD.bill_Item = QD.bill_Item 
+                    JOIN qaRepairDetailReason RDR ON RM.qaRepair_ID = RDR.qaRepair_ID AND RD.repair_Item = RDR.repair_Item
+                    JOIN qaRepairTypeMaster RTM ON RDR.type_ID = RTM.type_ID
+                    JOIN qaRepairTypeDetail RTD ON RDR.type_ID = RTD.type_ID AND RDR.reason_No = RTD.reason_No
+            WHERE CAST(repairDate AS DATE) = @DATE AND RM.OrderNumber = @OrderNumber 
+            GROUP BY OrderItemNo, RTM.repairType, RTD.reasonType
+
+    `);
+        let dataReturn = recordsets[0]
+        dataReturn.forEach((item, indexItem) => {
+            dataReturn[indexItem].facSend = recordsets[1].filter(({ OrderItemNo }) => item.ItemNo === OrderItemNo);
+            dataReturn[indexItem].qaPass = recordsets[2].filter(({ OrderItemNo }) => item.ItemNo === OrderItemNo);
+            dataReturn[indexItem].qaRepair = recordsets[3].filter(({ OrderItemNo }) => item.ItemNo === OrderItemNo);
+            dataReturn[indexItem].countRow =
+                dataReturn[indexItem].facSend.length > 0 ||
+                    dataReturn[indexItem].qaPass.length > 0 ||
+                    dataReturn[indexItem].qaRepair.length > 0 ? dataReturn[indexItem].facSend.length > dataReturn[indexItem].qaPass.length ?
+                    dataReturn[indexItem].facSend.length > dataReturn[indexItem].qaRepair.length ? dataReturn[indexItem].facSend.length : dataReturn[indexItem].qaRepair.length :
+                    dataReturn[indexItem].qaPass.length > dataReturn[indexItem].qaRepair.length ? dataReturn[indexItem].qaPass.length : dataReturn[indexItem].qaRepair.length : 1
+        })
+
+        res.json(dataReturn);
         await pool.close;
     } catch (error) {
         res.status(500).json({ result: constants.kResultNok });

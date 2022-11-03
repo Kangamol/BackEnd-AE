@@ -723,7 +723,7 @@ router.post("/getbatchpartsforreceive", async (req, res) => {
 });
 
 router.post("/confirmReceiveParts", async (req, res) => {
-  const { PurchasePerson, FactoryReceivePerson } = req.body;
+  const { BatchNumber, PurchasePerson, FactoryReceivePerson } = req.body;
   try {
     const pool = await poolPromise;
     const { recordset } = await pool.request()
@@ -736,7 +736,7 @@ router.post("/confirmReceiveParts", async (req, res) => {
             FactoryRequestDate = CAST(GETDATE() AS DATE),
             FactoryRequestTime = CAST(GETDATE() AS TIME)
         FROM AccPurchaseStatusDetail APD
-        WHERE	BatchNumber = '22000017'
+        WHERE	BatchNumber = '${BatchNumber}'
                 `);
     // console.log(recordset)
     res.json({ result: constants.kResultOk });
