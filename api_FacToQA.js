@@ -956,7 +956,7 @@ router.post("/reportFactoQa", async (req, res) => {
         const pool = await poolPromise;
         const { recordsets } = await pool.request().query(`
             --DATA DATE
-            SELECT	A.*
+            SELECT	A.*, Customer.Status AS SalesTeam
             FROM	qaReportFacToQa A JOIN OrderMaster ON OrderMaster.OrderNumber = A.OrderNumber 
                     JOIN Customer ON OrderMaster.CusCode = Customer.CusCode
             WHERE	A.OrderNumber LIKE '%${orderFilter}%' AND CAST(jobDate AS DATE) BETWEEN '${billDate[0]}' AND '${billDate[1]}' 
